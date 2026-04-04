@@ -23,7 +23,14 @@ testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True
 testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
  
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
- 
+
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
  
 class Net(nn.Module):
     def __init__(self):
@@ -95,6 +102,7 @@ def evaluate(net):
  
  
 if __name__ == '__main__':
+    set_seed(42)
     net = Net().to(device)
     losses = train(net, epochs=30)
     evaluate(net)

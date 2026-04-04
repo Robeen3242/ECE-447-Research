@@ -25,6 +25,7 @@ pip install matplotlib
 pip install ipywidgets
 pip install seaborn
 pip install plotly
+pip install escnn
 ```
  
 > **Note:** If you intend to use GPU acceleration, install the appropriate CUDA-enabled version of PyTorch from [pytorch.org](https://pytorch.org/get-started/locally/) before proceeding with the remaining packages.

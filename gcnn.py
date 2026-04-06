@@ -47,7 +47,7 @@ class GCNN(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.gspace = gspaces.flipRot2dOnR2(N=4)
+        self.gspace = gspaces.rot2dOnR2(N=4)
 
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
         feat_type_1   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])

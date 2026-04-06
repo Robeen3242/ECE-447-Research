@@ -7,8 +7,8 @@ import torchvision
 import torchvision.transforms as transforms
 import numpy as np
 
-from e2cnn import gspaces
-from e2cnn import nn as enn
+from escnn import gspaces
+from escnn import nn as enn
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

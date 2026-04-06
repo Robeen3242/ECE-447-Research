@@ -1,3 +1,5 @@
+import json
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -5,8 +7,8 @@ import torchvision
 import torchvision.transforms as transforms
 import numpy as np
  
-from escnn import gspaces
-from escnn import nn as enn
+from e2cnn import gspaces
+from e2cnn import nn as enn
  
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 batch_size = 64
@@ -16,7 +18,6 @@ transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
  
-# Use full 50k training set — same as cnn.py and gcnn.py
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
 testset  = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
  
@@ -50,12 +51,11 @@ class GCNNP4M(nn.Module):
     def __init__(self):
         super().__init__()
  
-        # p4m = translations + 90-degree rotations + reflections (dihedral D4, order 8)
-        self.gspace = gspaces.flipRot2dOnR2(N=4)
+        self.gspace = gspaces.FlipRot2dOnR2(N=4)
  
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
-        feat_type_1   = enn.FieldType(self.gspace, 2 * [self.gspace.regular_repr])  # ~6/sqrt(8)
-        feat_type_2   = enn.FieldType(self.gspace, 5 * [self.gspace.regular_repr])  # ~16/sqrt(8)
+        feat_type_1   = enn.FieldType(self.gspace, 2 * [self.gspace.regular_repr])
+        feat_type_2   = enn.FieldType(self.gspace, 5 * [self.gspace.regular_repr])
  
         self.block1 = enn.SequentialModule(
             enn.R2Conv(self.in_type, feat_type_1, kernel_size=5, padding=0, bias=False),
@@ -69,10 +69,9 @@ class GCNNP4M(nn.Module):
         )
         self.pool2 = enn.PointwiseMaxPool(feat_type_2, kernel_size=2, stride=2)
  
-        # GroupPooling collapses the orientation/reflection channels -> plain tensor
         self.gpool = enn.GroupPooling(feat_type_2)
  
-        self.fc1 = None  # sized dynamically below
+        self.fc1 = None
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
  
@@ -113,10 +112,11 @@ def train(net, epochs=30):
  
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    epoch_losses = []
+    history = {'train_loss': []}
  
     for epoch in range(epochs):
         running_loss = 0.0
+        net.train()
         for inputs, labels in trainloader:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -127,45 +127,88 @@ def train(net, epochs=30):
             running_loss += loss.item()
  
         avg_loss = running_loss / len(trainloader)
-        epoch_losses.append(avg_loss)
+        history['train_loss'].append(float(avg_loss))
         print(f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f}')
  
-    return epoch_losses
+    return history
  
  
 def evaluate(net):
     testloader = torch.utils.data.DataLoader(
         testset, batch_size=batch_size, shuffle=False, num_workers=2
     )
+    criterion = nn.CrossEntropyLoss(reduction='sum')
  
     correct_pred = {classname: 0 for classname in classes}
     total_pred   = {classname: 0 for classname in classes}
+    total_loss = 0.0
+    total_samples = 0
  
+    net.eval()
     with torch.no_grad():
         for images, labels in testloader:
             images, labels = images.to(device), labels.to(device)
             outputs = net(images)
+            total_loss += criterion(outputs, labels).item()
+            total_samples += labels.size(0)
             _, predictions = torch.max(outputs, 1)
             for label, prediction in zip(labels, predictions):
                 if label == prediction:
                     correct_pred[classes[label]] += 1
                 total_pred[classes[label]] += 1
  
-    total_correct = sum(correct_pred.values())
-    total_total   = sum(total_pred.values())
-    overall = 100 * total_correct / total_total
-    print(f'\nOverall accuracy: {overall:.1f}%')
+    overall = 100 * sum(correct_pred.values()) / total_samples
+    avg_loss = total_loss / total_samples
  
+    print(f'\nTest loss: {avg_loss:.4f}')
+    print(f'Overall accuracy: {overall:.1f}%')
     for classname in classes:
         accuracy = 100 * float(correct_pred[classname]) / total_pred[classname]
         print(f'  {classname:5s}: {accuracy:.1f}%')
  
-    return overall
+    per_class = {
+        classname: round(100 * float(correct_pred[classname]) / total_pred[classname], 2)
+        for classname in classes
+    }
+    return float(avg_loss), float(overall), per_class
+ 
+ 
+def save_results(history, test_loss, test_acc, per_class, out_dir='results/gcnn_p4m_report'):
+    os.makedirs(out_dir, exist_ok=True)
+ 
+    summary = {
+        'config': {
+            'model': 'GCNN (p4m)',
+            'epochs': len(history['train_loss']),
+            'batch_size': batch_size,
+            'optimizer': 'SGD',
+            'lr': 0.001,
+            'momentum': 0.9,
+        },
+        'split': {
+            'train': len(trainset),
+            'test': len(testset),
+        },
+        'test_metrics': {
+            'test_loss': test_loss,
+            'test_accuracy': test_acc,
+            'per_class_accuracy': per_class,
+        },
+    }
+ 
+    with open(os.path.join(out_dir, 'metrics_summary.json'), 'w') as f:
+        json.dump(summary, f, indent=2)
+ 
+    with open(os.path.join(out_dir, 'train_history.json'), 'w') as f:
+        json.dump(history, f, indent=2)
+ 
+    print(f'\nSaved report artifacts to: {out_dir}')
  
  
 if __name__ == '__main__':
     set_seed(42)
     net = GCNNP4M().to(device)
-    losses = train(net, epochs=30)
-    evaluate(net)
+    history = train(net, epochs=30)
+    test_loss, test_acc, per_class = evaluate(net)
+    save_results(history, test_loss, test_acc, per_class)
     torch.save(net.state_dict(), 'gcnn_p4m.pth')

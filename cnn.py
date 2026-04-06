@@ -1,10 +1,11 @@
+import json
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
 import numpy as np
  
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -23,7 +24,8 @@ testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True
 testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
  
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
+ 
+ 
 def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -31,6 +33,7 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+ 
  
 class Net(nn.Module):
     def __init__(self):
@@ -55,11 +58,12 @@ class Net(nn.Module):
 def train(net, epochs=30):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    epoch_losses = []
+    history = {'train_loss': []}
  
     for epoch in range(epochs):
         running_loss = 0.0
-        for i, (inputs, labels) in enumerate(trainloader):
+        net.train()
+        for inputs, labels in trainloader:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = net(inputs)
@@ -69,20 +73,26 @@ def train(net, epochs=30):
             running_loss += loss.item()
  
         avg_loss = running_loss / len(trainloader)
-        epoch_losses.append(avg_loss)
+        history['train_loss'].append(float(avg_loss))
         print(f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f}')
  
-    return epoch_losses
+    return history
  
  
 def evaluate(net):
+    criterion = nn.CrossEntropyLoss(reduction='sum')
     correct_pred = {classname: 0 for classname in classes}
     total_pred = {classname: 0 for classname in classes}
+    total_loss = 0.0
+    total_samples = 0
  
+    net.eval()
     with torch.no_grad():
         for images, labels in testloader:
             images, labels = images.to(device), labels.to(device)
             outputs = net(images)
+            total_loss += criterion(outputs, labels).item()
+            total_samples += labels.size(0)
             _, predictions = torch.max(outputs, 1)
             for label, prediction in zip(labels, predictions):
                 if label == prediction:
@@ -90,20 +100,58 @@ def evaluate(net):
                 total_pred[classes[label]] += 1
  
     total_correct = sum(correct_pred.values())
-    total_total = sum(total_pred.values())
-    overall = 100 * total_correct / total_total
-    print(f'\nOverall accuracy: {overall:.1f}%')
+    overall = 100 * total_correct / total_samples
+    avg_loss = total_loss / total_samples
  
+    print(f'\nTest loss: {avg_loss:.4f}')
+    print(f'Overall accuracy: {overall:.1f}%')
     for classname in classes:
         accuracy = 100 * float(correct_pred[classname]) / total_pred[classname]
         print(f'  {classname:5s}: {accuracy:.1f}%')
  
-    return overall
+    per_class = {
+        classname: round(100 * float(correct_pred[classname]) / total_pred[classname], 2)
+        for classname in classes
+    }
+    return float(avg_loss), float(overall), per_class
+ 
+ 
+def save_results(history, test_loss, test_acc, per_class, out_dir='results/cnn_report'):
+    os.makedirs(out_dir, exist_ok=True)
+ 
+    summary = {
+        'config': {
+            'model': 'CNN (Z2)',
+            'epochs': len(history['train_loss']),
+            'batch_size': batch_size,
+            'optimizer': 'SGD',
+            'lr': 0.001,
+            'momentum': 0.9,
+        },
+        'split': {
+            'train': len(trainset),
+            'test': len(testset),
+        },
+        'test_metrics': {
+            'test_loss': test_loss,
+            'test_accuracy': test_acc,
+            'per_class_accuracy': per_class,
+        },
+    }
+ 
+    with open(os.path.join(out_dir, 'metrics_summary.json'), 'w') as f:
+        json.dump(summary, f, indent=2)
+ 
+    with open(os.path.join(out_dir, 'train_history.json'), 'w') as f:
+        json.dump(history, f, indent=2)
+ 
+    print(f'\nSaved report artifacts to: {out_dir}')
  
  
 if __name__ == '__main__':
     set_seed(42)
     net = Net().to(device)
-    losses = train(net, epochs=30)
-    evaluate(net)
+    history = train(net, epochs=30)
+    test_loss, test_acc, per_class = evaluate(net)
+    save_results(history, test_loss, test_acc, per_class)
     torch.save(net.state_dict(), 'cnn_baseline.pth')

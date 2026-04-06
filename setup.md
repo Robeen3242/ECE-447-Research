@@ -38,3 +38,12 @@ You can verify the core packages were installed correctly by running:
 python -c "import torch; print(torch.__version__)"
 ```
  
+ # Alternatives
+
+ If you are on a different Python version or have particular Windows configurations and are unable to 
+
+ ```bash
+ pip install escnn
+ ```
+ 
+ Create a Google Collab notebook and create two cells. The first cell should run the installation for escnn while the second cell contains any one of our models.

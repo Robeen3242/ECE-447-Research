@@ -50,8 +50,8 @@ class GCNN(nn.Module):
         self.gspace = gspaces.rot2dOnR2(N=4)
 
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
-        feat_type_1   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
-        feat_type_2   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
+        feat_type_1 = enn.FieldType(self.gspace, 32 * [self.gspace.regular_repr])  # 64 / 2
+        feat_type_2 = enn.FieldType(self.gspace, 64 * [self.gspace.regular_repr])  # 128 / 2
 
         self.block1 = enn.SequentialModule(
             enn.R2Conv(self.in_type, feat_type_1, kernel_size=5, padding=0, bias=False),

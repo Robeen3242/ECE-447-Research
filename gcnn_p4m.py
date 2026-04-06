@@ -6,36 +6,36 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
- 
+
 from escnn import gspaces
 from escnn import nn as enn
- 
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 batch_size = 64
- 
+
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
- 
+
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
 testset  = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
- 
+
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
- 
- 
+
+
 def set_seed(seed=42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
- 
- 
+
+
 class GCNNP4M(nn.Module):
     """
     p4m-equivariant CNN.
- 
+
     p4m has 8 group elements (4 rotations x 2 mirror states). Free conv params
     are stored as base filters (all 8 transformed copies derived), so param
     count matches the Z2 CNN and p4 GCNN despite the larger internal representation.
@@ -43,38 +43,38 @@ class GCNNP4M(nn.Module):
       conv2: regular(8) -> regular(8),  kernel=5
       fc1:   200 -> 235, fc2: 235 -> 84, fc3: 84 -> 10
     """
- 
+
     def __init__(self):
         super().__init__()
- 
+
         self.gspace = gspaces.flipRot2dOnR2(N=4)
- 
+
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
         feat_type_1   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
         feat_type_2   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
- 
+
         self.block1 = enn.SequentialModule(
             enn.R2Conv(self.in_type, feat_type_1, kernel_size=5, padding=0, bias=False),
             enn.ReLU(feat_type_1),
         )
         self.pool1 = enn.PointwiseMaxPool(feat_type_1, kernel_size=2, stride=2)
- 
+
         self.block2 = enn.SequentialModule(
             enn.R2Conv(feat_type_1, feat_type_2, kernel_size=5, padding=0, bias=False),
             enn.ReLU(feat_type_2),
         )
         self.pool2 = enn.PointwiseMaxPool(feat_type_2, kernel_size=2, stride=2)
- 
+
         self.gpool = enn.GroupPooling(feat_type_2)
- 
+
         self.fc1 = None
         self.fc2 = nn.Linear(235, 84)
         self.fc3 = nn.Linear(84, 10)
- 
+
         self._initialize_fc()
- 
+
     def _initialize_fc(self):
-        dummy = torch.zeros(1, 3, 32, 32)
+        dummy = torch.zeros(1, 3, 32, 32).to(device)
         x = enn.GeometricTensor(dummy, self.in_type)
         x = self.block1(x)
         x = self.pool1(x)
@@ -83,7 +83,7 @@ class GCNNP4M(nn.Module):
         x = self.gpool(x)
         flat_size = x.tensor.flatten(1).shape[1]
         self.fc1 = nn.Linear(flat_size, 235)
- 
+
     def forward(self, x):
         x = enn.GeometricTensor(x, self.in_type)
         x = self.block1(x)
@@ -91,14 +91,14 @@ class GCNNP4M(nn.Module):
         x = self.block2(x)
         x = self.pool2(x)
         x = self.gpool(x)
- 
+
         x = x.tensor.flatten(1)
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
         return x
- 
- 
+
+
 def train(net, epochs=30):
     g = torch.Generator()
     g.manual_seed(42)
@@ -108,12 +108,12 @@ def train(net, epochs=30):
     valloader = torch.utils.data.DataLoader(
         testset, batch_size=batch_size, shuffle=False, num_workers=2
     )
- 
+
     criterion = nn.CrossEntropyLoss()
     val_criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     history = {'train_loss': [], 'val_loss': []}
- 
+
     for epoch in range(epochs):
         # --- Training ---
         net.train()
@@ -126,10 +126,10 @@ def train(net, epochs=30):
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
- 
+
         avg_train_loss = running_loss / len(trainloader)
         history['train_loss'].append(float(avg_train_loss))
- 
+
         # --- Validation ---
         net.eval()
         val_loss = 0.0
@@ -140,26 +140,26 @@ def train(net, epochs=30):
                 outputs = net(inputs)
                 val_loss += val_criterion(outputs, labels).item()
                 val_samples += labels.size(0)
- 
+
         avg_val_loss = val_loss / val_samples
         history['val_loss'].append(float(avg_val_loss))
- 
+
         print(f'Epoch [{epoch + 1}/{epochs}]  Train Loss: {avg_train_loss:.3f}  Val Loss: {avg_val_loss:.4f}')
- 
+
     return history
- 
- 
+
+
 def evaluate(net):
     testloader = torch.utils.data.DataLoader(
         testset, batch_size=batch_size, shuffle=False, num_workers=2
     )
     criterion = nn.CrossEntropyLoss(reduction='sum')
- 
+
     correct_pred = {classname: 0 for classname in classes}
     total_pred   = {classname: 0 for classname in classes}
     total_loss   = 0.0
     total_samples = 0
- 
+
     net.eval()
     with torch.no_grad():
         for images, labels in testloader:
@@ -172,26 +172,26 @@ def evaluate(net):
                 if label == prediction:
                     correct_pred[classes[label]] += 1
                 total_pred[classes[label]] += 1
- 
+
     overall  = 100 * sum(correct_pred.values()) / total_samples
     avg_loss = total_loss / total_samples
- 
+
     print(f'\nTest Loss: {avg_loss:.4f}')
     print(f'Overall Accuracy: {overall:.1f}%')
     for classname in classes:
         accuracy = 100 * float(correct_pred[classname]) / total_pred[classname]
         print(f'  {classname:5s}: {accuracy:.1f}%')
- 
+
     per_class = {
         classname: round(100 * float(correct_pred[classname]) / total_pred[classname], 2)
         for classname in classes
     }
     return float(avg_loss), float(overall), per_class
- 
- 
+
+
 def save_results(history, test_loss, test_acc, per_class, total_params, out_dir='results/gcnn_p4m_report'):
     os.makedirs(out_dir, exist_ok=True)
- 
+
     summary = {
         'config': {
             'model': 'GCNN (p4m)',
@@ -212,16 +212,16 @@ def save_results(history, test_loss, test_acc, per_class, total_params, out_dir=
             'per_class_accuracy': per_class,
         },
     }
- 
+
     with open(os.path.join(out_dir, 'metrics_summary.json'), 'w') as f:
         json.dump(summary, f, indent=2)
- 
+
     with open(os.path.join(out_dir, 'train_history.json'), 'w') as f:
         json.dump(history, f, indent=2)
- 
+
     print(f'\nSaved report artifacts to: {out_dir}')
- 
- 
+
+
 if __name__ == '__main__':
     set_seed(42)
     net = GCNNP4M().to(device)

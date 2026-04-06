@@ -42,12 +42,12 @@ class Net(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.conv1 = nn.Conv2d(3, 64, 5)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 18, 5)
-        self.fc1 = nn.Linear(18 * 5 * 5, 125)
-        self.fc2 = nn.Linear(125, 84)
-        self.fc3 = nn.Linear(84, 10)
+        self.conv2 = nn.Conv2d(64, 128, 5)
+        self.fc1 = nn.Linear(128 * 5 * 5, 1024)
+        self.fc2 = nn.Linear(1024, 512)
+        self.fc3 = nn.Linear(512, 10)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))

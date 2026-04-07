@@ -34,14 +34,14 @@ def set_seed(seed=42):
 
 class GCNNP4M(nn.Module):
     """
-    p4m-equivariant CNN.
+    p4m-equivariant CNN — ~1.37M parameters.
 
-    p4m has 8 group elements (4 rotations x 2 mirror states). Free conv params
-    are stored as base filters (all 8 transformed copies derived), so param
-    count matches the Z2 CNN and p4 GCNN despite the larger internal representation.
-      conv1: trivial(3) -> regular(8),  kernel=5
-      conv2: regular(8) -> regular(8),  kernel=5
-      fc1:   200 -> 235, fc2: 235 -> 84, fc3: 84 -> 10
+    p4m has 8 group elements (4 rotations x 2 mirror states). Filter counts
+    are chosen so that learnable parameters match the Z2 CNN and p4 GCNN.
+      conv1: trivial(3) -> regular(48),  kernel=5
+      conv2: regular(48) -> regular(88), kernel=5
+      After GroupPooling: flat = 88 * 5 * 5 = 2200
+      fc1: 2200 -> 512, fc2: 512 -> 256, fc3: 256 -> 10
     """
 
     def __init__(self):
@@ -50,10 +50,8 @@ class GCNNP4M(nn.Module):
         self.gspace = gspaces.flipRot2dOnR2(N=4)
 
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
-        # feat_type_1 = enn.FieldType(self.gspace, 21 * [self.gspace.regular_repr])  # 64 / 3
-        # feat_type_2 = enn.FieldType(self.gspace, 43 * [self.gspace.regular_repr])  # 128 / 3
-        feat_type_1   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
-        feat_type_2   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
+        feat_type_1   = enn.FieldType(self.gspace, 48 * [self.gspace.regular_repr])
+        feat_type_2   = enn.FieldType(self.gspace, 88 * [self.gspace.regular_repr])
 
         self.block1 = enn.SequentialModule(
             enn.R2Conv(self.in_type, feat_type_1, kernel_size=5, padding=0, bias=False),
@@ -69,10 +67,10 @@ class GCNNP4M(nn.Module):
 
         self.gpool = enn.GroupPooling(feat_type_2)
 
-        # p4m has 8 elements, 8 fields, spatial 5x5 -> 8*5*5 = 200
-        self.fc1 = nn.Linear(200, 235)
-        self.fc2 = nn.Linear(235, 84)
-        self.fc3 = nn.Linear(84, 10)
+        # flat size after GroupPooling = 88 * 5 * 5 = 2200
+        self.fc1 = nn.Linear(2200, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, 10)
 
     def forward(self, x):
         x = enn.GeometricTensor(x, self.in_type)
@@ -99,10 +97,10 @@ def train(net, epochs=30):
         testset, batch_size=batch_size, shuffle=False, num_workers=2
     )
 
-    criterion = nn.CrossEntropyLoss()
+    criterion     = nn.CrossEntropyLoss()
     val_criterion = nn.CrossEntropyLoss(reduction='sum')
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    history = {'train_loss': [], 'val_loss': []}
+    optimizer     = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    history       = {'train_loss': [], 'val_loss': []}
 
     for epoch in range(epochs):
         # --- Training ---
@@ -122,13 +120,12 @@ def train(net, epochs=30):
 
         # --- Validation ---
         net.eval()
-        val_loss = 0.0
+        val_loss    = 0.0
         val_samples = 0
         with torch.no_grad():
             for inputs, labels in valloader:
                 inputs, labels = inputs.to(device), labels.to(device)
-                outputs = net(inputs)
-                val_loss += val_criterion(outputs, labels).item()
+                val_loss    += val_criterion(net(inputs), labels).item()
                 val_samples += labels.size(0)
 
         avg_val_loss = val_loss / val_samples
@@ -145,9 +142,9 @@ def evaluate(net):
     )
     criterion = nn.CrossEntropyLoss(reduction='sum')
 
-    correct_pred = {classname: 0 for classname in classes}
-    total_pred   = {classname: 0 for classname in classes}
-    total_loss   = 0.0
+    correct_pred  = {classname: 0 for classname in classes}
+    total_pred    = {classname: 0 for classname in classes}
+    total_loss    = 0.0
     total_samples = 0
 
     net.eval()
@@ -155,7 +152,7 @@ def evaluate(net):
         for images, labels in testloader:
             images, labels = images.to(device), labels.to(device)
             outputs = net(images)
-            total_loss += criterion(outputs, labels).item()
+            total_loss    += criterion(outputs, labels).item()
             total_samples += labels.size(0)
             _, predictions = torch.max(outputs, 1)
             for label, prediction in zip(labels, predictions):

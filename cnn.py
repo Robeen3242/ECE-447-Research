@@ -38,16 +38,15 @@ def set_seed(seed):
 class Net(nn.Module):
     """
     Z2 CNN baseline — ~70,983 parameters.
-    conv1: 3->6, conv2: 6->18, fc1: 450->125, fc2: 125->84, fc3: 84->10
-    """
+    conv1: 3->68, conv2: 68->160, fc1: 4000->256, fc2: 256->256, fc3: 256->10    """
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 64, 5)
+        self.conv1 = nn.Conv2d(3, 68, 5)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(64, 128, 5)
-        self.fc1 = nn.Linear(128 * 5 * 5, 1024)
-        self.fc2 = nn.Linear(1024, 512)
-        self.fc3 = nn.Linear(512, 10)
+        self.conv2 = nn.Conv2d(68, 160, 5)
+        self.fc1 = nn.Linear(160 * 5 * 5, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 10)
 
         # self.conv1 = nn.Conv2d(3, 6, 5)
         # self.pool = nn.MaxPool2d(2, 2)

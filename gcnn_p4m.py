@@ -50,6 +50,8 @@ class GCNNP4M(nn.Module):
         self.gspace = gspaces.flipRot2dOnR2(N=4)
 
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
+        # feat_type_1 = enn.FieldType(self.gspace, 21 * [self.gspace.regular_repr])  # 64 / 3
+        # feat_type_2 = enn.FieldType(self.gspace, 43 * [self.gspace.regular_repr])  # 128 / 3
         feat_type_1   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
         feat_type_2   = enn.FieldType(self.gspace, 8 * [self.gspace.regular_repr])
 
@@ -67,22 +69,10 @@ class GCNNP4M(nn.Module):
 
         self.gpool = enn.GroupPooling(feat_type_2)
 
-        self.fc1 = None
+        # p4m has 8 elements, 8 fields, spatial 5x5 -> 8*5*5 = 200
+        self.fc1 = nn.Linear(200, 235)
         self.fc2 = nn.Linear(235, 84)
         self.fc3 = nn.Linear(84, 10)
-
-        self._initialize_fc()
-
-    def _initialize_fc(self):
-        dummy = torch.zeros(1, 3, 32, 32).to(device)
-        x = enn.GeometricTensor(dummy, self.in_type)
-        x = self.block1(x)
-        x = self.pool1(x)
-        x = self.block2(x)
-        x = self.pool2(x)
-        x = self.gpool(x)
-        flat_size = x.tensor.flatten(1).shape[1]
-        self.fc1 = nn.Linear(flat_size, 235)
 
     def forward(self, x):
         x = enn.GeometricTensor(x, self.in_type)

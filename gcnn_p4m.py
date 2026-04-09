@@ -50,8 +50,8 @@ class GCNNP4M(nn.Module):
         self.gspace = gspaces.flipRot2dOnR2(N=4)
 
         self.in_type  = enn.FieldType(self.gspace, 3 * [self.gspace.trivial_repr])
-        feat_type_1   = enn.FieldType(self.gspace, 48 * [self.gspace.regular_repr])
-        feat_type_2   = enn.FieldType(self.gspace, 88 * [self.gspace.regular_repr])
+        feat_type_1 = enn.FieldType(self.gspace, 36 * [self.gspace.regular_repr])
+        feat_type_2 = enn.FieldType(self.gspace, 66 * [self.gspace.regular_repr])
 
         self.block1 = enn.SequentialModule(
             enn.R2Conv(self.in_type, feat_type_1, kernel_size=5, padding=0, bias=False),
@@ -68,9 +68,9 @@ class GCNNP4M(nn.Module):
         self.gpool = enn.GroupPooling(feat_type_2)
 
         # flat size after GroupPooling = 88 * 5 * 5 = 2200
-        self.fc1 = nn.Linear(2200, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 10)
+        self.fc1 = nn.Linear(1650, 384)
+        self.fc2 = nn.Linear(384, 192)
+        self.fc3 = nn.Linear(192, 10)
 
     def forward(self, x):
         x = enn.GeometricTensor(x, self.in_type)

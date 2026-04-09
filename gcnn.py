@@ -217,4 +217,4 @@ if __name__ == '__main__':
     history = train(net, epochs=30)
     test_loss, test_acc, per_class = evaluate(net)
     save_results(history, test_loss, test_acc, per_class, total_params)
-    torch.save(net.state_dict(), 'gcnn.pth')
+    torch.save(net.state_dict(), 'gcnn.pth') 

@@ -1,0 +1,52 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{setspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{enumitem}
+\usepackage{gensymb}
+\usepackage{mathtools}
+\usepackage{flexisym}
+
+\title{ECE 447 Project}
+\author{Kavin Kumaran, Adil Tapal, Robin Liu, Hasan Zia}
+\date{April 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+    (\textit{insert text here})
+\section{What is a convolutional neural network?}
+    A convolutional neural network (CNN) is a specific kind of neural network. To begin with, we give a brief overview of neural networks. In classical machine learning, models are trained on input data to then make predictions on similar data in the future. To train such models, one must manually determine what is deemed interesting - these are referred to as the features of the data. Neural networks aim to automate the feature extraction process. When a neural network is given data, the data is put through different layers of computational neurons, which apply functions on the data. The specific functions used differ based on the type of neural network being used. This is where convolutional neural networks come in - the layers found within CNNs are inspired by the visual pathways within the human brain. As one may assume, CNNs are thus often used in computer vision contexts, to analyse and classify different images. Moreover, CNNs apply the following functions:
+    \begin{enumerate}
+        \item Convolution/correlation;
+        \item Pooling;
+        \item Batch normalization;
+        \item Flattening; and
+        \item Softmax.
+    \end{enumerate}
+    For the sake of our discussion, we focus primarily on convolution/correlation and pooling.
+\section{What is a group?}
+    A group is an algebraic structure. Formally, it is a tuple \(G = (S, \circ)\) (where \(S\) is a set and \(\circ: S \times S \to S\) is a binary operation) that satisfies the following axiomatic properties:
+    \begin{enumerate}
+        \item \(S\) is closed under \(\circ\), i.e. for every \(s_1, s_2 \in S\), we have that \(s_1 \circ s_2 \in S\);
+        \item \(\circ\) is associative, i.e. for every \(s_1, s_2, s_3 \in S\), we have that \\
+        \((s_1 \circ s_2) \circ s_3 = s_1 \circ (s_2 \circ s_3)\);
+        \item There exists an identity element \(e \in S\) such that for every \(s \in S\), we have that \(e \circ s = s \circ e = s\); and
+        \item For every \(s \in S\), there exists an inverse element \(s^{-1} \in S\) such that we have \(s \circ s^{-1} = s^{-1} \circ s = e\).
+    \end{enumerate}
+    While this is the proper definition, this may appear daunting and unintuitive - what sort of structure actually is a group, and what makes groups useful? A more intuitive description of groups would be that they describe sets of symmetries. They represent the different actions that may be taken on some object which leave the object looking the same. For example, consider a non-square rectangle. With this more general notion of a symmetry, we consider the following to be the symmetries of a non-square rectangle (which is known as the Klein four-group \(K_4\)):
+    \begin{enumerate}
+        \item Doing nothing (this is the identity symmetry \(e\));
+        \item A \(180^{\circ}\) counter-clockwise rotation;
+        \item The vertical reflection; and
+        \item The horizontal reflection.
+    \end{enumerate}
+    While a proof will not be given, all groups satisfying the formal definition may be expressed equivalently as a set of symmetries. (This follows due to a result in group theory known as Cayley's Theorem.) Moreover, this description illuminates the significance of groups - group theory allows us to formally study the behaviour of symmetries. As such, groups naturally may be used when training convolutional neural networks on understanding and classifying images.
+\section{The groups \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\)}
+    Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, rotations about any centre of rotation, and mirror reflections.
+\end{document}

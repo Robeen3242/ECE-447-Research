@@ -51,16 +51,11 @@
         \item The horizontal reflection.
     \end{enumerate}
     While a proof will not be given, all groups satisfying the formal definition may be expressed equivalently as a set of symmetries. (This follows due to a result in group theory known as Cayley's Theorem.) Moreover, this description illuminates the significance of groups - group theory allows us to formally study the behaviour of symmetries. As such, groups naturally may be used when training convolutional neural networks on understanding and classifying images.
-\section{Summary of Cohen et al.\ (2016)}
-\subsection{The core idea: equivariance}
 
-The central idea behind Cohen and Welling is that standard CNNs are equivariant only to translations, and this specific limitation causes them to waste parameters showing that this can learn many copier of the same filter at different orientations. A map $\Phi$ is said to be equivariant with respect to a group $G$ if
-\[
-\Phi(T_g x) = T_g' \Phi(x) \quad \forall\, g \in G,
-\]
-where $T_g$ and $T_g'$ are the actions of the group element $g$ on the input and output spaces respectively. Intuitively, equivalence means that transforming the input and then applying the map gives the same result as applying the maps first and then transforming the output the transformation then passes through the layer.
 \section{The groups \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\)}
     Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, rotations about any centre of rotation, and mirror reflections.
+
+    (Not done yet)
 
 \section{Summary of Cohen et al.\ (2016)}
 \subsection{The core idea: equivariance}

@@ -46,4 +46,4 @@ python -c "import torch; print(torch.__version__)"
  pip install escnn
  ```
  
- Create a Google Collab notebook and create two cells. The first cell should run the installation for escnn while the second cell contains any one of our models.
+ Create a Google Collab notebook and create two cells. The first cell should run the installation for escnn (as shown directly above) while the second cell contains any one of our models.

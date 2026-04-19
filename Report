@@ -21,7 +21,7 @@
 \section{Introduction}
     The central challenge in image classification is the fact that the same image can appear in different orientations, positions, and reflections. A handwritten digit "6" rotated 90\degree\ is still a "6", yet a standard convolutional neural network (CNN) must learn this equivalence from data, needing large quantaties of training examples to execute this reliably.
     
-    Cohen and Welling[1] address this shortcoming directly. Their paper introduces \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalization of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
+    Cohen and Welling[1] address this shortcoming directly. Their paper introduce \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalization of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
 
     In this report, we can explain the core idea is the paper on top of the mathematical G-CNNs. We can begin with a brief overview of convolutional neural networks and group theory separately, which provides the necessary background to understand the G-convolution operation. We are then able to describe our reproduction experiments, offer a critical evaluation of the paper, and close with individual reflections from the group member.
 \section{What is a convolutional neural network?}
@@ -33,7 +33,19 @@
         \item Flattening; and
         \item Softmax.
     \end{enumerate}
-    For the sake of our discussion, we focus primarily on convolution/correlation and pooling.
+    For the sake of our discussion, we focus primarily on convolution/correlation and pooling. Informally, convolution applies a sort of filter (a weighted average) on a number of pixels to combine them into one "blurred" pixel. If \(l \in \mathbb{N}\) is the layer, and the set of feature maps are of the form \(f: \mathbb{Z}^2 \to \mathbb{R}^{K^l}\), a convolution will convolve them with a set of \(K^{l + 1}\) filters of the form \(\psi^i: \mathbb{Z}^2 \to \mathbb{R}^{K^l}\), which is formally expressed as the following function:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{R}, x \mapsto [f * \psi^i](x) := \sum_{y \in \mathbb{Z}^2} \sum_{k = 1}^{K^l} f_k(y)\psi^i(x - y).
+    \end{align*}
+    Notice that the input to the filters is reversed. Correlation is defined similarly, with the only difference being that the input is not reversed, i.e.
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{R}, x \mapsto [f \star \psi^i](x) := \sum_{y \in \mathbb{Z}^2} \sum_{k = 1}^{K^l} f_k(y)\psi^i(y - x).
+    \end{align*}
+    Pooling also reduces the number of pixels. Suppose \(U \subset \mathbb{Z}^2\) is a pooling domain, \(n \in \mathbb{Z}^2\) is some translation, and \(f: \mathbb{Z}^2 \to \mathbb{R}\) is a feature map. Then, the max-pooling operation is given by some pooling operator \(P\) such that
+    \begin{align*}
+        Pf(n) := \max_{k \in (n + U)} f(k).
+    \end{align*}
+    In other words, max-pooling chooses the largest feature map \(f(k)\) from a translation of a pooling domain \(n + U\). Moreover, notice that these functions are defined with the domain of \(\mathbb{Z}^2\). As will be explained in more detail later, this set is made up of 2D translations. As such, as an example, suppose a CNN is trained to recognise and classify images of dogs, with the dogs being in the centre of all of the images. This CNN would be able to correctly classify images of dogs that now have the dogs on the sides rather than the centres. This is because these images essentially have the dogs translated away from the centre; such translations may be "recognised," as \(\mathbb{Z}^2\) is comprised of them. However, the same cannot be said for rotated or reflected images of dogs; to account for this, one would need to independently train the CNN on rotated and reflected photos (this is known as data augmentation). Cohen et al. address this issue by generalizing \(\mathbb{Z}^2\), turning to concepts from a field in mathematics known as group theory.
 \section{What is a group?}
     A group is an algebraic structure. Formally, it is a tuple \(G = (S, \circ)\) (where \(S\) is a set and \(\circ: S \times S \to S\) is a binary operation) that satisfies the following axiomatic properties:
     \begin{enumerate}
@@ -53,9 +65,7 @@
     While a proof will not be given, all groups satisfying the formal definition may be expressed equivalently as a set of symmetries. (This follows due to a result in group theory known as Cayley's Theorem.) Moreover, this description illuminates the significance of groups - group theory allows us to formally study the behaviour of symmetries. As such, groups naturally may be used when training convolutional neural networks on understanding and classifying images.
 
 \section{The groups \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\)}
-    Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, rotations about any centre of rotation, and mirror reflections.
-
-    (Not done yet)
+    Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, rotations about any centre of rotation, and mirror reflections. As discussed above, \(\mathbb{Z}^2\) is the domain for the convolution/correlation and max-pooling functions used by traditional CNNs. As such, CNNs are able to recognise and correctly classify translated images. However, they require data augmentation to be able to do the same with rotations and reflections. 
 
 \section{Summary of Cohen et al.\ (2016)}
 \subsection{The core idea: equivariance}

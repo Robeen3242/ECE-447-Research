@@ -49,78 +49,66 @@ def create_dataloader(dataset, batch_size=batch_size, shuffle=False, num_workers
 
 class GCNN(nn.Module):
     """
-    p4-equivariant CNN — ~1.37M parameters.
-
-    p4 has 4 group elements (90-degree rotations). Filter counts are chosen
-    so that the number of learnable parameters matches the Z2 CNN baseline.
-      conv1: trivial(3) -> regular(48),  kernel=5
-      conv2: regular(48) -> regular(88), kernel=5
-      After GroupPooling: flat = 88 * 5 * 5 = 2200
-      fc1: 2200 -> 512, fc2: 512 -> 256, fc3: 256 -> 10
+    p4-equivariant All-CNN-style network aligned with the CIFAR-10 setup in
+    Cohen and Welling (2016). The p4 filter counts are scaled by about sqrt(4)=2
+    relative to the planar baseline to keep the parameter count similar.
     """
-    def __init__(self,in_channels=3,num_classes=10,group_order=4,regular_channels=(48, 88),kernel_sizes=(5, 5),
-        hidden_dims=(512, 256),input_size=(32, 32),pool_kernel=2,pool_stride=2,):
+    def __init__(
+        self,
+        in_channels=3,
+        num_classes=10,
+        group_order=4,
+        regular_channels=(48, 48, 48, 96, 96, 96, 96, 96, 10),
+        kernel_sizes=(3, 3, 3, 3, 3, 3, 3, 1, 1),
+        strides=(1, 1, 2, 1, 1, 2, 1, 1, 1),
+        input_size=(32, 32),
+    ):
         
         super().__init__()
-        if len(regular_channels) != 2 or len(kernel_sizes) != 2 or len(hidden_dims) != 2:
-            raise ValueError("regular_channels, kernel_sizes, and hidden_dims must each contain exactly 2 values")
+        if not (len(regular_channels) == len(kernel_sizes) == len(strides) == 9):
+            raise ValueError("regular_channels, kernel_sizes, and strides must each contain exactly 9 values")
 
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.group_order = group_order
         self.regular_channels = tuple(regular_channels)
         self.kernel_sizes = tuple(kernel_sizes)
-        self.hidden_dims = tuple(hidden_dims)
+        self.strides = tuple(strides)
         self.input_size = tuple(input_size)
 
         self.gspace = gspaces.rot2dOnR2(N=group_order)
 
         self.in_type = enn.FieldType(self.gspace, in_channels * [self.gspace.trivial_repr])
-        feat_type_1 = enn.FieldType(self.gspace, regular_channels[0] * [self.gspace.regular_repr])
-        feat_type_2 = enn.FieldType(self.gspace, regular_channels[1] * [self.gspace.regular_repr])
+        blocks = []
+        current_type = self.in_type
+        for out_channels, kernel_size, stride in zip(regular_channels, kernel_sizes, strides):
+            next_type = enn.FieldType(self.gspace, out_channels * [self.gspace.regular_repr])
+            blocks.append(
+                enn.SequentialModule(
+                    enn.R2Conv(
+                        current_type,
+                        next_type,
+                        kernel_size=kernel_size,
+                        stride=stride,
+                        padding=kernel_size // 2,
+                        bias=False,
+                    ),
+                    enn.ReLU(next_type),
+                )
+            )
+            current_type = next_type
 
-        self.block1 = enn.SequentialModule(
-            enn.R2Conv(self.in_type, feat_type_1, kernel_size=kernel_sizes[0], padding=0, bias=False),
-            enn.ReLU(feat_type_1),
-        )
-        self.pool1 = enn.PointwiseMaxPool(feat_type_1, kernel_size=pool_kernel, stride=pool_stride)
-
-        self.block2 = enn.SequentialModule(
-            enn.R2Conv(feat_type_1, feat_type_2, kernel_size=kernel_sizes[1], padding=0, bias=False),
-            enn.ReLU(feat_type_2),
-        )
-        self.pool2 = enn.PointwiseMaxPool(feat_type_2, kernel_size=pool_kernel, stride=pool_stride)
-
-        self.gpool = enn.GroupPooling(feat_type_2)
-
-        flattened_dim = self._get_flattened_dim()
-        self.fc1 = nn.Linear(flattened_dim, hidden_dims[0])
-        self.fc2 = nn.Linear(hidden_dims[0], hidden_dims[1])
-        self.fc3 = nn.Linear(hidden_dims[1], num_classes)
-
-    def _get_flattened_dim(self):
-        with torch.no_grad():
-            sample = torch.zeros(1, self.in_channels, *self.input_size)
-            sample = enn.GeometricTensor(sample, self.in_type)
-            sample = self.block1(sample)
-            sample = self.pool1(sample)
-            sample = self.block2(sample)
-            sample = self.pool2(sample)
-            sample = self.gpool(sample)
-            return sample.tensor.flatten(1).shape[1]
+        self.blocks = nn.ModuleList(blocks)
+        self.gpool = enn.GroupPooling(current_type)
+        self.classifier_pool = nn.AdaptiveAvgPool2d((1, 1))
 
     def forward(self, x):
         x = enn.GeometricTensor(x, self.in_type)
-        x = self.block1(x)
-        x = self.pool1(x)
-        x = self.block2(x)
-        x = self.pool2(x)
+        for block in self.blocks:
+            x = block(x)
         x = self.gpool(x)
-
-        x = x.tensor.flatten(1)
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = self.classifier_pool(x.tensor)
+        x = torch.flatten(x, 1)
         return x
 
 
@@ -224,6 +212,7 @@ def save_results(
 ):
     os.makedirs(out_dir, exist_ok=True)
 
+    conv_filters = list(GCNN().regular_channels)
     summary = {
         'config': {
             'model': 'GCNN (p4)',
@@ -233,6 +222,8 @@ def save_results(
             'optimizer': 'SGD',
             'lr': 0.001,
             'momentum': 0.9,
+            'num_conv_layers': len(conv_filters),
+            'filters_per_conv_layer': conv_filters,
         },
         'split': {
             'train': train_size,
@@ -268,3 +259,4 @@ if __name__ == '__main__':
     test_loss, test_acc, per_class = evaluate(net, testloader=testloader)
     save_results(history, test_loss, test_acc, per_class, total_params, train_size=len(trainset), test_size=len(testset))
     torch.save(net.state_dict(), 'gcnngeneral.pth')
+

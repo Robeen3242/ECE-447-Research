@@ -48,45 +48,45 @@ def create_dataloader(dataset, batch_size=batch_size, shuffle=False, num_workers
 
 class Net(nn.Module):
     """
-    Z2 CNN baseline — ~70,983 parameters.
-    conv1: 3->68, conv2: 68->160, fc1: 4000->256, fc2: 256->256, fc3: 256->10
+    Z2 CNN baseline aligned more closely with the CIFAR-10 setup in
+    Cohen and Welling (2016): an All-CNN-style network with 9 convolution
+    layers and global average pooling.
     """
-    def __init__(self,in_channels=3,num_classes=10,conv_channels=(68, 160),kernel_sizes=(5, 5),hidden_dims=(256, 256),
-        input_size=(32, 32),pool_kernel=2,pool_stride=2,):
+    def __init__(
+        self,
+        in_channels=3,
+        num_classes=10,
+        conv_channels=(96, 96, 96, 192, 192, 192, 192, 192, 10),
+        kernel_sizes=(3, 3, 3, 3, 3, 3, 3, 1, 1),
+        strides=(1, 1, 2, 1, 1, 2, 1, 1, 1),
+    ):
         super().__init__()
-        if len(conv_channels) != 2 or len(kernel_sizes) != 2 or len(hidden_dims) != 2:
-            raise ValueError("conv_channels, kernel_sizes, and hidden_dims must each contain exactly 2 values")
+        if not (len(conv_channels) == len(kernel_sizes) == len(strides) == 9):
+            raise ValueError("conv_channels, kernel_sizes, and strides must each contain exactly 9 values")
 
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.conv_channels = tuple(conv_channels)
         self.kernel_sizes = tuple(kernel_sizes)
-        self.hidden_dims = tuple(hidden_dims)
-        self.input_size = tuple(input_size)
-        self.pool = nn.MaxPool2d(pool_kernel, pool_stride)
+        self.strides = tuple(strides)
 
-        self.conv1 = nn.Conv2d(in_channels, conv_channels[0], kernel_sizes[0])
-        self.conv2 = nn.Conv2d(conv_channels[0], conv_channels[1], kernel_sizes[1])
+        layers = []
+        current_channels = in_channels
+        for out_channels, kernel_size, stride in zip(conv_channels, kernel_sizes, strides):
+            padding = kernel_size // 2
+            layers.extend([
+                nn.Conv2d(current_channels, out_channels, kernel_size, stride=stride, padding=padding),
+                nn.ReLU(inplace=True),
+            ])
+            current_channels = out_channels
 
-        flattened_dim = self._get_flattened_dim()
-        self.fc1 = nn.Linear(flattened_dim, hidden_dims[0])
-        self.fc2 = nn.Linear(hidden_dims[0], hidden_dims[1])
-        self.fc3 = nn.Linear(hidden_dims[1], num_classes)
-
-    def _get_flattened_dim(self):
-        with torch.no_grad():
-            sample = torch.zeros(1, self.in_channels, *self.input_size)
-            sample = self.pool(F.relu(self.conv1(sample)))
-            sample = self.pool(F.relu(self.conv2(sample)))
-            return sample.flatten(1).shape[1]
+        self.features = nn.Sequential(*layers)
+        self.classifier_pool = nn.AdaptiveAvgPool2d((1, 1))
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
+        x = self.features(x)
+        x = self.classifier_pool(x)
         x = torch.flatten(x, 1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
         return x
 
 
@@ -170,7 +170,9 @@ def save_results(
 ):
     os.makedirs(out_dir, exist_ok=True)
 
-    total_params = sum(p.numel() for p in (net if net is not None else Net()).parameters())
+    model = net if net is not None else Net()
+    total_params = sum(p.numel() for p in model.parameters())
+    conv_filters = list(model.conv_channels) if hasattr(model, 'conv_channels') else []
     summary = {
         'config': {
             'model': 'CNN (Z2)',
@@ -180,6 +182,8 @@ def save_results(
             'optimizer': 'SGD',
             'lr': 0.001,
             'momentum': 0.9,
+            'num_conv_layers': len(conv_filters),
+            'filters_per_conv_layer': conv_filters,
         },
         'split': {
             'train': train_size,

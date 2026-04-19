@@ -21,7 +21,7 @@
 \section{Introduction}
     The central challenge in image classification is the fact that the same image can appear in different orientations, positions, and reflections. A handwritten digit "6" rotated 90\degree\ is still a "6", yet a standard convolutional neural network (CNN) must learn this equivalence from data, needing large quantaties of training examples to execute this reliably.
     
-    Cohen and Welling[1] address this shortcoming directly. Their paper introduce \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalization of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
+    Cohen and Welling[1] address this shortcoming directly. Their paper introduce \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalisation of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
 
     In this report, we can explain the core idea is the paper on top of the mathematical G-CNNs. We can begin with a brief overview of convolutional neural networks and group theory separately, which provides the necessary background to understand the G-convolution operation. We are then able to describe our reproduction experiments, offer a critical evaluation of the paper, and close with individual reflections from the group member.
 \section{What is a convolutional neural network?}
@@ -37,15 +37,15 @@
     \begin{align*}
         \mathbb{Z}^2 \to \mathbb{R}, x \mapsto [f * \psi^i](x) := \sum_{y \in \mathbb{Z}^2} \sum_{k = 1}^{K^l} f_k(y)\psi^i(x - y).
     \end{align*}
-    Notice that the input to the filters is reversed. Correlation is defined similarly, with the only difference being that the input is not reversed, i.e.
+    Notice that the input to the filters is reversed (the input of the feature maps is \(y\), but for the filters, it is \(x\) shifted by the inverse [i.e., negative] of \(y\)). Correlation is defined similarly, with the only difference being that the input is not reversed:
     \begin{align*}
         \mathbb{Z}^2 \to \mathbb{R}, x \mapsto [f \star \psi^i](x) := \sum_{y \in \mathbb{Z}^2} \sum_{k = 1}^{K^l} f_k(y)\psi^i(y - x).
     \end{align*}
-    Pooling also reduces the number of pixels, but instead of requiring filter functions, it is done solely with feature maps. Max-pooling, in particular, finds the maximum value of a given feature map over a so-called pooling domain, which is obtained from the input. It is defined as follows: suppose \(U \subset \mathbb{Z}^2\) is a pooling domain, \(n \in \mathbb{Z}^2\) is some translation, and \(f: \mathbb{Z}^2 \to \mathbb{R}\) is a feature map. Then, the max-pooling operation is given by some pooling operator \(P\) such that
+    Pooling also reduces the number of pixels, but instead of requiring filter functions, it is done solely with feature maps. Max-pooling, in particular, finds the maximum value of a given feature map over a so-called pooling domain, which is obtained from the input. It is defined as follows: suppose \(U \subset \mathbb{Z}^2\) is a pooling domain, the set \(n + U = \{n + u \hspace{0.5 mm}|\hspace{0.5 mm} n \in \mathbb{Z}^2, u \in U\}\) is a translation of \(U\), and \(f: \mathbb{Z}^2 \to \mathbb{R}\) is a feature map. Then, the max-pooling operation is given by some pooling operator \(P\) such that
     \begin{align*}
         Pf(n) := \max_{k \in (n + U)} f(k).
     \end{align*}
-    In other words, max-pooling finds the greatest value of a feature map \(f\) over some translation of a pooling domain \(n + U\). Moreover, notice that these functions are defined with the domain of \(\mathbb{Z}^2\). As will be explained in more detail later, this set can be thought of as being made up of 2D translations. (This is why \(n\), in the definition of max-pooling, is considered a translation; it translates the pixel coordinates in \(U\) to \(n + U\).) As such, as an example, suppose a CNN is trained to recognise and classify images of dogs, with the dogs being in the centre of all of the images. This CNN would be able to correctly classify images of dogs that now have the dogs on the sides rather than the centres. This is because these images essentially have the dogs translated away from the centre; such translations may be "recognised," as \(\mathbb{Z}^2\) is comprised of them. However, the same cannot be said for rotated or reflected images of dogs; to account for this, one would need to independently train the CNN on rotated and reflected photos (this is known as data augmentation). Cohen et al. address this issue by generalizing \(\mathbb{Z}^2\), turning to concepts from a field in mathematics known as group theory.
+    In other words, max-pooling finds the greatest value of a feature map \(f\) over some translation of a pooling domain \(n + U\). Moreover, notice that these functions are defined with the domain of \(\mathbb{Z}^2\). As will be explained in more detail later, this set can be thought of as being made up of 2D translations. As such, as an example, suppose a CNN is trained to recognise and classify images of dogs, with the dogs being in the centre of all of the images. This CNN would be able to correctly classify images of dogs that now have the dogs on the sides rather than the centres. This is because these images essentially have the dogs translated away from the centre; such translations may be "recognised," as \(\mathbb{Z}^2\) is comprised of them. However, the same cannot be said for rotated or reflected images of dogs; to account for this, one would need to independently train the CNN on rotated and reflected photos (this is known as data augmentation). Cohen et al. address this issue by generalising \(\mathbb{Z}^2\), turning to concepts from a field in mathematics known as group theory.
 \section{What is a group?}
     A group is an algebraic structure. Formally, it is a tuple \(G = (S, \circ)\) (where \(S\) is a set and \(\circ: S \times S \to S\) is a binary operation) that satisfies the following axiomatic properties:
     \begin{enumerate}
@@ -117,11 +117,33 @@ The central idea behind Cohen and Welling is that standard CNNs are equivariant 
 \[
 \Phi(T_g x) = T_g' \Phi(x) \quad \forall\, g \in G,
 \]
-where $T_g$ and $T_g'$ are the actions of the group element $g$ on the input and output spaces respectively. Intuitively, equivalence means that transforming the input and then applying the map gives the same result as applying the maps first and then transforming the output the transformation then passes through the layer.
+where $T_g$ and $T_g'$ are the actions of the group element $g$ on the input and output spaces respectively. Intuitively, equivalence means that transforming the input and then applying the map gives the same result as applying the maps first and then transforming the output the transformation then passes through the layer. \\ \\
+Notice that, as previously described, traditional CNNs do not require data augmentation to correctly classify images that translate certain features that they have learnt. This is because CNNs are translation-equivariant. In particular, we have that
+\begin{align*}
+    \Phi(T_n x) = T_n' \Phi(x) \quad \forall\, n \in \mathbb{Z}^2,
+\end{align*}
+i.e. transformations corresponding to elements of \(\mathbb{Z}^2\) (which would now be translations) commute with the map \(\Phi\). Cohen et al. extend this property of equivariance from translations to rotations and reflections, which then allow us to avoid data augmentation for the purposes of recognising said transformations.
 
 \subsection{The G-convolution}
-
+    Since \(p4\) and \(p4m\) are generalisations of \(\mathbb{Z}^2\), the convolution/correlation and max-pooling functions described in section 2 must be modified (generalised from the domains of \(\mathbb{Z}^2\) to arbitrary groups). We begin with the G-equivariant correlation function. Let \((G, \circ)\) be an arbitrary group. In the first layer, we have
+    \begin{align*}
+        G \to \mathbb{R}, g \mapsto [f \star \psi](g) := \sum_{y \in \mathbb{Z}^2} \sum_{k} f_k(y)\psi_k(g^{-1}y).
+    \end{align*}
+    Here, the input data is coming directly from the image, hence why we may assume that \(y \in \mathbb{Z}\), since the position of pixels in the image is given by elements of \(\mathbb{Z}^2\). As a result, \(f\) and \(\psi\) are functions over \(\mathbb{Z}^2\). However, as can be seen from the definition, \(f \star \psi\) is defined for general groups, and this is necessary for all layers beyond the first. Thus, for all other layers, a more general definition is given:
+    \begin{align*}
+        G \to \mathbb{R}, g \mapsto [f \star \psi](g) := \sum_{h \in G} \sum_{k} f_k(h)\psi_k(g^{-1}h).
+    \end{align*}
+    Cohen et al. derive the equivariance of both of these functions, showing in particular that they commute with translations (in the case of the G-correlation in the first layer), and with all symmetries in \(G\) (in the case of the correlation for all other layers). This is because, for the first layer, \(f\) and \(\psi\) are functions over \(\mathbb{Z}^2\), so any transformations that may be applied on the two must also be over \(\mathbb{Z}^2\). For every other layer, \(f\) and \(\psi\) are functions over \(G\), so the transformations are now more generally over \(G\) as well.
 \subsection{Other layers and full G-CNN equivariance}
+    Aside from convolution/correlation, some more functions are defined for G-CNNs. These include nonlinearities and subgroup and coset max-pooling. We begin with nonlinearities. First, they address issues that may arise due to nonlinearities. If \(\nu: \mathbb{R} \to \mathbb{R}\) is a nonlinearity, then we have the corresponding composition operator \(C_\nu\), defined as
+    \begin{align*}
+        C_\nu f(g) := [\nu \circ f](g) = \nu(f(g)).
+    \end{align*}
+    It is shown that \(C_\nu L_h f = L_h C_\nu f\), i.e. \(C\) commutes with an arbitrary left transformation \(L\). In other words, the composition operator is equivariant to all group transformations. Next, we discuss subgroup and coset max-pooling. Max-pooling is generalised as follows:
+    \begin{align*}
+        Pf(n) := \max_{k \in gU} f(k),
+    \end{align*}
+    where \(U \subset G\) and \(gU = \{gu \hspace{0.5 mm}|\hspace{0.5 mm} g \in G, u \in U\}\). This definition alone, however, does not guarantee equivariance. Cohen et al. resolve this issue by using the unique behaviour of groups - in particular, they show that they obtain equivariance by requiring \(U\) to itself be a group when paired with the binary operation of \(G\) (i.e., by requiring \(U\) to be a subgroup of \(G\)). When doing this, we find that for every \(g_1, g_2 \in G\), we either have that \(g_1U = g_2U\) or \(g_1U \cap g_2U = \varnothing\); and also that \(G = \bigcup_{g \in G} gU\). In other words, \(G\) is equal to the disjoint union of \(U\) and its transformations \(gU\) (referred to as [left] cosets); \(U\) and its cosets evenly divide \(G\) into disjoint subsets. This is relevant, as the notion of pooling with stride can be naturally extended by pooling with a pooling domain \(H\) which is a subgroup of \(G\), so it can be extended while maintaining equivariance as desired.
 
 \subsection{Efficient implementation}
 

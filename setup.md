@@ -37,6 +37,32 @@ You can verify the core packages were installed correctly by running:
 ```bash
 python -c "import torch; print(torch.__version__)"
 ```
+
+## Known Issue
+
+On some Windows Conda setups, `pip install escnn` can fail even when the environment itself is set up correctly. In this project, the failure has come from optional dependency resolution during the `escnn` install.
+
+If that happens, first make sure `pip` is available and updated inside the active environment:
+
+```bash
+conda install pip
+python -m ensurepip --upgrade
+python -m pip install --upgrade pip setuptools wheel
+```
+
+If `pip install escnn` still fails, this workaround has been confirmed to work:
+
+```bash
+python -m pip install scipy lie-learn
+python -m pip install joblib pymanopt autograd
+python -m pip install --no-deps escnn
+```
+
+You can verify the installation with:
+
+```bash
+python -c "import escnn; print(escnn.__version__)"
+```
  
  # Alternatives
 

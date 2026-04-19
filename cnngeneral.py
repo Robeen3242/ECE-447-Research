@@ -12,16 +12,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 batch_size = 64
 
-transform = transforms.Compose([
+DEFAULT_TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
-
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-
-testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -33,6 +27,23 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def get_cifar10_datasets(root='./data', transform=DEFAULT_TRANSFORM, download=True):
+    trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=download, transform=transform)
+    testset = torchvision.datasets.CIFAR10(root=root, train=False, download=download, transform=transform)
+    return trainset, testset
+
+
+def create_dataloader(dataset, batch_size=batch_size, shuffle=False, num_workers=2, generator=None):
+    loader_kwargs = {
+        'batch_size': batch_size,
+        'shuffle': shuffle,
+        'num_workers': num_workers,
+    }
+    if generator is not None:
+        loader_kwargs['generator'] = generator
+    return torch.utils.data.DataLoader(dataset, **loader_kwargs)
 
 
 class Net(nn.Module):
@@ -79,9 +90,13 @@ class Net(nn.Module):
         return x
 
 
-def train(net, epochs=30):
+def train(net, trainloader=None, epochs=30, lr=0.001, momentum=0.9):
+    if trainloader is None:
+        trainset, _ = get_cifar10_datasets()
+        trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
+
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
     history = {'train_loss': []}
 
     for epoch in range(epochs):
@@ -103,10 +118,14 @@ def train(net, epochs=30):
     return history
 
 
-def evaluate(net):
+def evaluate(net, testloader=None, class_names=classes):
+    if testloader is None:
+        _, testset = get_cifar10_datasets()
+        testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
+
     criterion = nn.CrossEntropyLoss(reduction='sum')
-    correct_pred = {classname: 0 for classname in classes}
-    total_pred = {classname: 0 for classname in classes}
+    correct_pred = {classname: 0 for classname in class_names}
+    total_pred = {classname: 0 for classname in class_names}
     total_loss = 0.0
     total_samples = 0
 
@@ -120,26 +139,35 @@ def evaluate(net):
             _, predictions = torch.max(outputs, 1)
             for label, prediction in zip(labels, predictions):
                 if label == prediction:
-                    correct_pred[classes[label]] += 1
-                total_pred[classes[label]] += 1
+                    correct_pred[class_names[label]] += 1
+                total_pred[class_names[label]] += 1
 
     overall = 100 * sum(correct_pred.values()) / total_samples
     avg_loss = total_loss / total_samples
 
     print(f'\nTest loss: {avg_loss:.4f}')
     print(f'Overall accuracy: {overall:.1f}%')
-    for classname in classes:
+    for classname in class_names:
         accuracy = 100 * float(correct_pred[classname]) / total_pred[classname]
         print(f'  {classname:5s}: {accuracy:.1f}%')
 
     per_class = {
         classname: round(100 * float(correct_pred[classname]) / total_pred[classname], 2)
-        for classname in classes
+        for classname in class_names
     }
     return float(avg_loss), float(overall), per_class
 
 
-def save_results(history, test_loss, test_acc, per_class, net=None, out_dir='results/cnn_report'):
+def save_results(
+    history,
+    test_loss,
+    test_acc,
+    per_class,
+    net=None,
+    train_size=50000,
+    test_size=10000,
+    out_dir='results/cnngeneral_report',
+):
     os.makedirs(out_dir, exist_ok=True)
 
     total_params = sum(p.numel() for p in (net if net is not None else Net()).parameters())
@@ -154,8 +182,8 @@ def save_results(history, test_loss, test_acc, per_class, net=None, out_dir='res
             'momentum': 0.9,
         },
         'split': {
-            'train': len(trainset),
-            'test': len(testset),
+            'train': train_size,
+            'test': test_size,
         },
         'test_metrics': {
             'test_loss': test_loss,
@@ -175,9 +203,12 @@ def save_results(history, test_loss, test_acc, per_class, net=None, out_dir='res
 
 if __name__ == '__main__':
     set_seed(42)
+    trainset, testset = get_cifar10_datasets()
+    trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
+    testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
     net = Net().to(device)
     print(f'Total parameters: {sum(p.numel() for p in net.parameters()):,}')
-    history = train(net, epochs=30)
-    test_loss, test_acc, per_class = evaluate(net)
-    save_results(history, test_loss, test_acc, per_class, net=net)
-    torch.save(net.state_dict(), 'cnn_baseline.pth')
+    history = train(net, trainloader=trainloader, epochs=30)
+    test_loss, test_acc, per_class = evaluate(net, testloader=testloader)
+    save_results(history, test_loss, test_acc, per_class, net=net, train_size=len(trainset), test_size=len(testset))
+    torch.save(net.state_dict(), 'cnngeneral.pth')

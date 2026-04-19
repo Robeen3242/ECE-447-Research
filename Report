@@ -9,9 +9,26 @@
 \usepackage{gensymb}
 \usepackage{mathtools}
 \usepackage{flexisym}
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage[preprint]{neurips_2025}
+
 
 \title{ECE 447 Project}
-\author{Kavin Kumaran, Adil Tapal, Robin Liu, Hasan Zia}
+
+\author{
+  Kavin Kumaran, Adil Tapal, Robin Liu, Hasan Zia \\
+  University of Alberta, Department of Electrical and Computer Engineering \\
+  116 St \& 85 Ave, Edmonton, AB T6G 2R3 \\
+  \texttt{kavinvas@ualberta.ca, atapal@ualberta.ca, robin9@ualberta.ca, hasanfar@ualberta.ca}
+}
+
 \date{April 2026}
 
 \begin{document}
@@ -19,9 +36,9 @@
 \maketitle
 
 \section{Introduction}
-    The central challenge in image classification is the fact that the same image can appear in different orientations, positions, and reflections. A handwritten digit "6" rotated 90\degree\ is still a "6", yet a standard convolutional neural network (CNN) must learn this equivalence from data, needing large quantaties of training examples to execute this reliably.
+    The central challenge in image classification is the fact that the same image can appear in different orientations, positions, and reflections. A handwritten digit "6" rotated 90\degree\ is still a "6," yet a standard convolutional neural network (CNN) must learn this equivalence from data, needing large quantaties of training examples to execute this reliably.
     
-    Cohen and Welling[1] address this shortcoming directly. Their paper introduce \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalisation of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
+    Cohen and Welling [1] address this shortcoming directly. Their paper introduce \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalisation of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
 
     In this report, we can explain the core idea is the paper on top of the mathematical G-CNNs. We can begin with a brief overview of convolutional neural networks and group theory separately, which provides the necessary background to understand the G-convolution operation. We are then able to describe our reproduction experiments, offer a critical evaluation of the paper, and close with individual reflections from the group member.
 \section{What is a convolutional neural network?}
@@ -133,7 +150,7 @@ i.e. transformations corresponding to elements of \(\mathbb{Z}^2\) (which would 
     \begin{align*}
         G \to \mathbb{R}, g \mapsto [f \star \psi](g) := \sum_{h \in G} \sum_{k} f_k(h)\psi_k(g^{-1}h).
     \end{align*}
-    Cohen et al. derive the equivariance of both of these functions, showing in particular that they commute with translations (in the case of the G-correlation in the first layer), and with all symmetries in \(G\) (in the case of the correlation for all other layers). This is because, for the first layer, \(f\) and \(\psi\) are functions over \(\mathbb{Z}^2\), so any transformations that may be applied on the two must also be over \(\mathbb{Z}^2\). For every other layer, \(f\) and \(\psi\) are functions over \(G\), so the transformations are now more generally over \(G\) as well.
+    Notice that, for the input of the filters, we apply the group binary operation between \(g^{-1}\) and the input to \(f \star \psi\). This is a generalisation of the standard definition, since the inverse of some \(n \in \mathbb{Z}^2\) is \(-n\) (\(n + (-n) = (-n) + n = 0\); it can be checked that \(0\) is the identity element of \((\mathbb{Z}^2, +)\)). Moreover, Cohen et al. derive the equivariance of both of these functions, showing in particular that they commute with translations (in the case of the G-correlation in the first layer), and with all symmetries in \(G\) (in the case of the correlation for all other layers). This is because, for the first layer, \(f\) and \(\psi\) are functions over \(\mathbb{Z}^2\), so any transformations that may be applied on the two must also be over \(\mathbb{Z}^2\). For every other layer, \(f\) and \(\psi\) are functions over \(G\), so the transformations are now more generally over \(G\) as well.
 \subsection{Other layers and full G-CNN equivariance}
     Aside from convolution/correlation, some more functions are defined for G-CNNs. These include nonlinearities and subgroup and coset max-pooling. We begin with nonlinearities. First, they address issues that may arise due to nonlinearities. If \(\nu: \mathbb{R} \to \mathbb{R}\) is a nonlinearity, then we have the corresponding composition operator \(C_\nu\), defined as
     \begin{align*}
@@ -147,9 +164,24 @@ i.e. transformations corresponding to elements of \(\mathbb{Z}^2\) (which would 
 
 \subsection{Efficient implementation}
 
+As discussed in the paper, computing the G-convolution for discrete groups mainly involves indexing operations and inner products \cite{cohen2016}. The key implementation idea is that the groups used in the paper, such as \(p4\) and \(p4m\), can be decomposed into a spatial translation and an orientation-changing transformation about the origin, such as a rotation or a reflection. This allows the group correlation to be rewritten in a form where the filter is first transformed into all required rotated or reflected versions, after which a standard fast planar convolution can be applied.
+
+To understand this more intuitively, it is useful to first consider a standard CNN. In a normal convolution layer, a filter is a small grid of learned values, such as a \(3\times3\) or \(5\times5\) pattern, that is slid across the image to detect the same feature at different spatial locations. In this case, the built-in symmetry is translation only.
+
+In a \(p4\) layer, however, each learned filter is associated with four rotated copies, corresponding to the four \(90^\circ\) rotations. In a \(p4m\) layer, each filter is associated with eight transformed copies, since reflections are also included. As a result, the hidden representation is no longer just a single 2D feature map, but a stack of feature maps, one for each allowed orientation state.
+
+This can also be understood in terms of the filter tensor having extra dimensions that encode these symmetry states. Rather than learning every rotated or reflected filter independently, the implementation generates these transformed copies efficiently through inexpensive index permutations. The expanded filter bank can then be reshaped and passed into a standard optimized planar convolution routine. In this way, the network preserves information about both spatial position and orientation, while still reusing the highly optimized convolution operations developed for ordinary CNNs.
+
 \subsection{Experimental results}
 
+The paper evaluates G-CNNs on two benchmarks: rotated MNIST and CIFAR-10. The purpose of these experiments was to determine whether replacing standard planar convolutions with group convolutions could improve classification performance while keeping the comparison approximately fair in terms of parameter count. On rotated MNIST, the dataset contained 62{,}000 randomly rotated handwritten digits and was split into 10{,}000 training, 2{,}000 validation, and 50{,}000 test examples. Model selection was performed using the validation set. The baseline model, denoted Z2CNN, used seven convolution layers with mostly \(3\times3\) kernels, a \(4\times4\) final layer, 20 channels per layer, ReLU activations, batch normalization, dropout, and max-pooling after layer 2. The model was optimized using Adam. The authors then replaced each standard convolution with a p4-convolution, reduced the number of filters by a factor of 2 to keep the parameter count approximately fixed, and applied max-pooling over rotations only after the final convolution layer. This model, called P4CNN, achieved substantially lower error than the baseline. They also evaluated a P4CNNRotationPooling variant, in which rotation pooling was applied after each convolution layer, to test whether introducing invariance too early would be harmful. This model improved over the baseline but performed worse than the full P4CNN, supporting the idea that equivariant structure should be preserved deeper in the network.
+
+For CIFAR-10, the dataset was divided into 40{,}000 training, 10{,}000 validation, and 10{,}000 test examples. Two baseline architectures were used: All-CNN-C and ResNet44. To create the equivariant variants, all standard convolutions were replaced with p4 or p4m convolutions. Because these group convolutions expand the internal representation, the number of filters was reduced so that the number of parameters remained approximately invariant. Specifically, p4 layers used about half as many filters, while p4m layers used about one third as many. The authors also compared performance with and without moderate data augmentation using horizontal flips and small translations. For the ResNet experiments, training used SGD with initial learning rate 0.05, momentum 0.9, and learning-rate reductions at epochs 50, 100, and 150, for a total of 300 epochs. Across both architectures, the equivariant models consistently outperformed their standard counterparts, with p4m-ResNet44 achieving particularly strong results on both plain and augmented CIFAR-10.
+
 \section{Reproduction Experiment}
+To evaluate the effect of equivariance on image classification, three models were compared: a standard \(\mathbb{Z}^2\) CNN, a \(p4\) group-equivariant CNN, and a \(p4m\) group-equivariant CNN. All models were trained on the same custom Rotated-MNIST dataset generated from MNIST, using identical train, validation, and test splits. This ensured that performance differences could be attributed primarily to the choice of symmetry-aware architecture rather than to changes in the data or training procedure.
+
+For each model, training and validation accuracy and loss were recorded over epochs, and the best checkpoint was selected using validation accuracy. Final comparisons were then made using test accuracy, parameter count, confusion matrices, and qualitative prediction examples. This experimental design allowed both quantitative and qualitative analysis of how equivariance affected model performance under rotated inputs.
 
 \subsection{Goal}
 

@@ -68,8 +68,8 @@ python -c "import escnn; print(escnn.__version__)"
 
 If you are on a different Python version or have particular Windows configurations and are unable to 
 
-```bash
-pip install escnn
-```
-
-Create a Google Collab notebook and create two cells. The first cell should run the installation for escnn (as shown directly above) while the second cell contains any one of our models.
+ ```bash
+ !pip install escnn
+ ```
+ 
+ Create a Google Collab notebook and create two cells. The first cell should run the installation for escnn (as shown directly above) while the second cell contains any one of our models.

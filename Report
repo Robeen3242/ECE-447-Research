@@ -45,7 +45,7 @@
     \begin{align*}
         Pf(n) := \max_{k \in (n + U)} f(k).
     \end{align*}
-    In other words, max-pooling finds the greatest value of a feature map \(f\) over some a translation of a pooling domain \(n + U\). Moreover, notice that these functions are defined with the domain of \(\mathbb{Z}^2\). As will be explained in more detail later, this set is made up of 2D translations. As such, as an example, suppose a CNN is trained to recognise and classify images of dogs, with the dogs being in the centre of all of the images. This CNN would be able to correctly classify images of dogs that now have the dogs on the sides rather than the centres. This is because these images essentially have the dogs translated away from the centre; such translations may be "recognised," as \(\mathbb{Z}^2\) is comprised of them. However, the same cannot be said for rotated or reflected images of dogs; to account for this, one would need to independently train the CNN on rotated and reflected photos (this is known as data augmentation). Cohen et al. address this issue by generalizing \(\mathbb{Z}^2\), turning to concepts from a field in mathematics known as group theory.
+    In other words, max-pooling finds the greatest value of a feature map \(f\) over some translation of a pooling domain \(n + U\). Moreover, notice that these functions are defined with the domain of \(\mathbb{Z}^2\). As will be explained in more detail later, this set can be thought of as being made up of 2D translations. (This is why \(n\), in the definition of max-pooling, is considered a translation; it translates the pixel coordinates in \(U\) to \(n + U\).) As such, as an example, suppose a CNN is trained to recognise and classify images of dogs, with the dogs being in the centre of all of the images. This CNN would be able to correctly classify images of dogs that now have the dogs on the sides rather than the centres. This is because these images essentially have the dogs translated away from the centre; such translations may be "recognised," as \(\mathbb{Z}^2\) is comprised of them. However, the same cannot be said for rotated or reflected images of dogs; to account for this, one would need to independently train the CNN on rotated and reflected photos (this is known as data augmentation). Cohen et al. address this issue by generalizing \(\mathbb{Z}^2\), turning to concepts from a field in mathematics known as group theory.
 \section{What is a group?}
     A group is an algebraic structure. Formally, it is a tuple \(G = (S, \circ)\) (where \(S\) is a set and \(\circ: S \times S \to S\) is a binary operation) that satisfies the following axiomatic properties:
     \begin{enumerate}
@@ -65,7 +65,50 @@
     While a proof will not be given, all groups satisfying the formal definition may be expressed equivalently as a set of symmetries. (This follows due to a result in group theory known as Cayley's Theorem.) Moreover, this description illuminates the significance of groups - group theory allows us to formally study the behaviour of symmetries. As such, groups naturally may be used when training convolutional neural networks on understanding and classifying images. In particular, they allow us to incorporate rotations and reflections in the domains of our functions, removing the need to use data augmentation to account for these symmetries.
 
 \section{The groups \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\)}
-    Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, rotations about any centre of rotation, and mirror reflections. As discussed above, \(\mathbb{Z}^2\) is the domain for the convolution/correlation and max-pooling functions used by traditional CNNs. As such, CNNs are able to recognise and correctly classify translated images. However, they require data augmentation to be able to do the same with rotations and reflections. 
+    Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all \(90^\circ\) rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, \(90^\circ\) rotations about any centre of rotation, and mirror reflections. As discussed above, \(\mathbb{Z}^2\) is the domain for the convolution/correlation and max-pooling functions used by traditional CNNs. As such, CNNs are able to recognise and correctly classify translated images. However, they require data augmentation to be able to do the same with rotations and reflections. To incorporate rotations, \(p4\) is introduced. Elements of this group are parametrised by the following function:
+    \begin{align*}
+        \{0, 1, 2, 3\} \times \mathbb{Z} \times \mathbb{Z} \to \mathbb{Z}^{3 \times 3}, (r, u, v) \mapsto g(r, u, v) := \begin{bmatrix}
+            \cos\left(\frac{r\pi}{2}\right) & -\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix}.
+    \end{align*}
+    As a group, \(p4\) includes a group binary operation, which in this case is matrix multiplication. It may be verified that the group axioms mentioned in section 3 are satisfied by \(p4\). Moreover, suppose \((u', v') \in \mathbb{Z}^2\) represents the position of a pixel. Then, an element in \(p4\) may act on \((u', v')\) as follows:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{Z}^2, (u', v') \mapsto h\left(\begin{bmatrix}
+            \cos\left(\frac{r\pi}{2}\right) & -\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix} \cdot \begin{bmatrix}
+            u' \\
+            v' \\
+            1
+        \end{bmatrix}\right),
+    \end{align*}
+    where \(h\) is the projection function given by
+    \begin{align*}
+        \mathbb{Z}^3 \to \mathbb{Z}^2, (x, y, z) \mapsto h(x, y, z) := (x, y).
+    \end{align*}
+    \(p4m\) further extends to include reflections. Similarly to \(p4\), we may parametrise elements of \(p4m\), which is given by
+    \begin{align*}
+        \{0, 1\} \times \{0, 1, 2, 3\} \times \mathbb{Z} \times \mathbb{Z} \to \mathbb{Z}^{3 \times 3}, (m, r, u, v) \mapsto g(m, r, u, v) := \begin{bmatrix}
+            (-1)^m\cos\left(\frac{r\pi}{2}\right) & -(-1)^m\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix}.
+    \end{align*}
+    Again, the group binary operation is \(p4m\); this satisfies the group axioms mentioned previously. Once more, if \((u', v') \in \mathbb{Z}^2\) represents the position of a pixel, then an element of \(p4m\) acts on \((u', v')\) as follows:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{Z}^2, (u', v') \mapsto h\left(\begin{bmatrix}
+            (-1)^m\cos\left(\frac{r\pi}{2}\right) & -(-1)^m\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix} \cdot \begin{bmatrix}
+            u' \\
+            v' \\
+            1
+        \end{bmatrix}\right).
+    \end{align*}
 
 \section{Summary of Cohen et al.\ (2016)}
 \subsection{The core idea: equivariance}

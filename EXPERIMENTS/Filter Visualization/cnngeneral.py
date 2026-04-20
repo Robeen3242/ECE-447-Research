@@ -86,7 +86,7 @@ class Net(nn.Module):
     """
     Z2 CNN baseline aligned more closely with the CIFAR-10 setup in
     Cohen and Welling (2016): an All-CNN-style network with 9 convolution
-    layers and global average pooling.
+    layers, batch normalization, and global average pooling.
     """
     def __init__(
         self,
@@ -112,6 +112,7 @@ class Net(nn.Module):
             padding = kernel_size // 2
             layers.extend([
                 nn.Conv2d(current_channels, out_channels, kernel_size, stride=stride, padding=padding),
+                nn.BatchNorm2d(out_channels),
                 nn.ReLU(inplace=True),
             ])
             current_channels = out_channels

@@ -1,0 +1,49 @@
+{
+  "config": {
+    "model": "CNN (Z2)",
+    "total_params": 1372254,
+    "epochs": 30,
+    "batch_size": 64,
+    "optimizer": "SGD",
+    "lr": 0.01,
+    "momentum": 0.9,
+    "weight_decay": 0.0005,
+    "lr_step_size": 10,
+    "lr_gamma": 0.1,
+    "train_rotation_degrees": 0,
+    "test_rotation_degrees": 0,
+    "num_conv_layers": 9,
+    "filters_per_conv_layer": [
+      96,
+      96,
+      96,
+      192,
+      192,
+      192,
+      192,
+      192,
+      10
+    ]
+  },
+  "split": {
+    "train": 45000,
+    "val": 5000,
+    "test": 10000
+  },
+  "test_metrics": {
+    "test_loss": 0.3715566302776337,
+    "test_accuracy": 87.5,
+    "per_class_accuracy": {
+      "plane": 89.2,
+      "car": 94.1,
+      "bird": 82.6,
+      "cat": 77.0,
+      "deer": 88.2,
+      "dog": 77.8,
+      "frog": 90.9,
+      "horse": 87.5,
+      "ship": 94.3,
+      "truck": 93.4
+    }
+  }
+}

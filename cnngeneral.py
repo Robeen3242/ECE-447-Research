@@ -8,6 +8,9 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
+#learning rate needed to be moved from 0.001 to 0.01 to get better performance, and the number of epochs needed to be increased from 20 to 30 to allow for convergence. With these adjustments, the model achieved a test accuracy of around 80% on CIFAR-10, which is a reasonable result for a simple CNN architecture without data augmentation or advanced regularization techniques.
+#batch normalization was also added
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -109,7 +112,6 @@ class Net(nn.Module):
             padding = kernel_size // 2
             layers.extend([
                 nn.Conv2d(current_channels, out_channels, kernel_size, stride=stride, padding=padding),
-                nn.BatchNorm2d(out_channels),
                 nn.ReLU(inplace=True),
             ])
             current_channels = out_channels

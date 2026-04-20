@@ -12,10 +12,24 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 batch_size = 64
 
-DEFAULT_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
+NORMALIZE_TRANSFORM = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+
+
+def build_cifar10_transform(train=False, rotation_degrees=0):
+    transform_steps = []
+    if rotation_degrees > 0:
+        if train:
+            transform_steps.append(transforms.RandomRotation(rotation_degrees))
+        else:
+            transform_steps.append(transforms.RandomRotation((rotation_degrees, rotation_degrees)))
+    transform_steps.extend([
+        transforms.ToTensor(),
+        NORMALIZE_TRANSFORM,
+    ])
+    return transforms.Compose(transform_steps)
+
+
+DEFAULT_TRANSFORM = build_cifar10_transform()
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -29,9 +43,14 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def get_cifar10_datasets(root='./data', transform=DEFAULT_TRANSFORM, download=True):
-    trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=download, transform=transform)
-    testset = torchvision.datasets.CIFAR10(root=root, train=False, download=download, transform=transform)
+def get_cifar10_datasets(
+    root='./data',
+    train_transform=DEFAULT_TRANSFORM,
+    test_transform=DEFAULT_TRANSFORM,
+    download=True,
+):
+    trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=download, transform=train_transform)
+    testset = torchvision.datasets.CIFAR10(root=root, train=False, download=download, transform=test_transform)
     return trainset, testset
 
 
@@ -166,6 +185,8 @@ def save_results(
     net=None,
     train_size=50000,
     test_size=10000,
+    train_rotation_degrees=0,
+    test_rotation_degrees=0,
     out_dir='results/cnngeneral_report',
 ):
     os.makedirs(out_dir, exist_ok=True)
@@ -182,6 +203,8 @@ def save_results(
             'optimizer': 'SGD',
             'lr': 0.001,
             'momentum': 0.9,
+            'train_rotation_degrees': train_rotation_degrees,
+            'test_rotation_degrees': test_rotation_degrees,
             'num_conv_layers': len(conv_filters),
             'filters_per_conv_layer': conv_filters,
         },
@@ -206,13 +229,28 @@ def save_results(
 
 
 if __name__ == '__main__':
+    train_rotation_degrees = 0
+    test_rotation_degrees = 0
+
     set_seed(42)
-    trainset, testset = get_cifar10_datasets()
+    train_transform = build_cifar10_transform(train=True, rotation_degrees=train_rotation_degrees)
+    test_transform = build_cifar10_transform(train=False, rotation_degrees=test_rotation_degrees)
+    trainset, testset = get_cifar10_datasets(train_transform=train_transform, test_transform=test_transform)
     trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
     testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
     net = Net().to(device)
     print(f'Total parameters: {sum(p.numel() for p in net.parameters()):,}')
     history = train(net, trainloader=trainloader, epochs=30)
     test_loss, test_acc, per_class = evaluate(net, testloader=testloader)
-    save_results(history, test_loss, test_acc, per_class, net=net, train_size=len(trainset), test_size=len(testset))
+    save_results(
+        history,
+        test_loss,
+        test_acc,
+        per_class,
+        net=net,
+        train_size=len(trainset),
+        test_size=len(testset),
+        train_rotation_degrees=train_rotation_degrees,
+        test_rotation_degrees=test_rotation_degrees,
+    )
     torch.save(net.state_dict(), 'cnngeneral.pth')

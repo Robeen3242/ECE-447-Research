@@ -1,0 +1,13 @@
+{
+  "model": "z2",
+  "seed": 999,
+  "params": 207562,
+  "best_val_accuracy_during_training": 93.9,
+  "final_best_checkpoint_val_loss": 0.20145298862457275,
+  "final_best_checkpoint_val_accuracy": 93.9,
+  "final_best_checkpoint_test_loss": 0.19527414952516556,
+  "final_best_checkpoint_test_accuracy": 94.11,
+  "history_file": "./results/rotated_mnist_method_compare/z2/seed_999/train_history.json",
+  "checkpoint_file": "./results/rotated_mnist_method_compare/z2/seed_999/best_model.pth",
+  "predictions_file": "./results/rotated_mnist_method_compare/z2/seed_999/predictions.npz"
+}

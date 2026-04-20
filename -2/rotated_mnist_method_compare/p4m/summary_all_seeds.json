@@ -1,0 +1,79 @@
+{
+  "config": {
+    "seeds": [
+      42,
+      999
+    ],
+    "split_seed": 42,
+    "rotation_seed": 123,
+    "data_root": "./data",
+    "out_dir": "./results/rotated_mnist_method_compare",
+    "epochs": 50,
+    "batch_size": 128,
+    "num_workers": 2,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "use_lr_scheduler": true,
+    "scheduler_type": "step",
+    "step_size": 25,
+    "gamma": 0.1,
+    "eta_min": 1e-05,
+    "train_size": 10000,
+    "val_size": 2000,
+    "test_size": 50000,
+    "num_classes": 10,
+    "deterministic": false,
+    "save_checkpoints": true,
+    "train_rotation_range": [
+      -180.0,
+      180.0
+    ],
+    "val_rotation_range": [
+      -180.0,
+      180.0
+    ],
+    "test_rotation_range": [
+      -180.0,
+      180.0
+    ]
+  },
+  "device": "cuda",
+  "model": "p4m",
+  "num_runs": 2,
+  "results_per_seed": [
+    {
+      "model": "p4m",
+      "seed": 42,
+      "params": 102082,
+      "best_val_accuracy_during_training": 96.45,
+      "final_best_checkpoint_val_loss": 0.12949793815612792,
+      "final_best_checkpoint_val_accuracy": 96.45,
+      "final_best_checkpoint_test_loss": 0.12549380625858902,
+      "final_best_checkpoint_test_accuracy": 95.98,
+      "history_file": "./results/rotated_mnist_method_compare/p4m/seed_42/train_history.json",
+      "checkpoint_file": "./results/rotated_mnist_method_compare/p4m/seed_42/best_model.pth",
+      "predictions_file": "./results/rotated_mnist_method_compare/p4m/seed_42/predictions.npz"
+    },
+    {
+      "model": "p4m",
+      "seed": 999,
+      "params": 102082,
+      "best_val_accuracy_during_training": 96.4,
+      "final_best_checkpoint_val_loss": 0.12624266815185547,
+      "final_best_checkpoint_val_accuracy": 96.4,
+      "final_best_checkpoint_test_loss": 0.13717422855049372,
+      "final_best_checkpoint_test_accuracy": 95.71,
+      "history_file": "./results/rotated_mnist_method_compare/p4m/seed_999/train_history.json",
+      "checkpoint_file": "./results/rotated_mnist_method_compare/p4m/seed_999/best_model.pth",
+      "predictions_file": "./results/rotated_mnist_method_compare/p4m/seed_999/predictions.npz"
+    }
+  ],
+  "aggregate": {
+    "val_accuracy_mean": 96.42500000000001,
+    "val_accuracy_std": 0.02499999999999858,
+    "test_accuracy_mean": 95.845,
+    "test_accuracy_std": 0.13500000000000512,
+    "test_error_mean": 4.155000000000001,
+    "test_error_std": 0.13500000000000512
+  }
+}

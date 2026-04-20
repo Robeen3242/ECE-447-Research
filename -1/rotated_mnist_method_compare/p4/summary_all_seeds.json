@@ -1,0 +1,74 @@
+{
+  "config": {
+    "seeds": [
+      42,
+      999
+    ],
+    "split_seed": 42,
+    "rotation_seed": 123,
+    "data_root": "./data",
+    "out_dir": "./results/rotated_mnist_method_compare",
+    "epochs": 40,
+    "batch_size": 128,
+    "num_workers": 2,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "train_size": 10000,
+    "val_size": 2000,
+    "test_size": 50000,
+    "num_classes": 10,
+    "deterministic": false,
+    "save_checkpoints": true,
+    "train_rotation_range": [
+      -180.0,
+      180.0
+    ],
+    "val_rotation_range": [
+      -180.0,
+      180.0
+    ],
+    "test_rotation_range": [
+      -180.0,
+      180.0
+    ]
+  },
+  "device": "cuda",
+  "model": "p4",
+  "num_runs": 2,
+  "results_per_seed": [
+    {
+      "model": "p4",
+      "seed": 42,
+      "params": 91050,
+      "best_val_accuracy_during_training": 97.9,
+      "final_best_checkpoint_val_loss": 0.08568127238750457,
+      "final_best_checkpoint_val_accuracy": 97.9,
+      "final_best_checkpoint_test_loss": 0.07054648552723229,
+      "final_best_checkpoint_test_accuracy": 97.85,
+      "history_file": "./results/rotated_mnist_method_compare/p4/seed_42/train_history.json",
+      "checkpoint_file": "./results/rotated_mnist_method_compare/p4/seed_42/best_model.pth",
+      "predictions_file": "./results/rotated_mnist_method_compare/p4/seed_42/predictions.npz"
+    },
+    {
+      "model": "p4",
+      "seed": 999,
+      "params": 91050,
+      "best_val_accuracy_during_training": 97.95,
+      "final_best_checkpoint_val_loss": 0.07667814058065414,
+      "final_best_checkpoint_val_accuracy": 97.95,
+      "final_best_checkpoint_test_loss": 0.06815970953069628,
+      "final_best_checkpoint_test_accuracy": 97.92,
+      "history_file": "./results/rotated_mnist_method_compare/p4/seed_999/train_history.json",
+      "checkpoint_file": "./results/rotated_mnist_method_compare/p4/seed_999/best_model.pth",
+      "predictions_file": "./results/rotated_mnist_method_compare/p4/seed_999/predictions.npz"
+    }
+  ],
+  "aggregate": {
+    "val_accuracy_mean": 97.92500000000001,
+    "val_accuracy_std": 0.02499999999999858,
+    "test_accuracy_mean": 97.88499999999999,
+    "test_accuracy_std": 0.035000000000003695,
+    "test_error_mean": 2.115000000000009,
+    "test_error_std": 0.035000000000003695
+  }
+}

@@ -1,0 +1,6 @@
+=== P4M Rotated-MNIST Summary ===
+Device: cuda
+Runs: 2
+Params: 102,082
+Val acc mean/std: 95.80% / 0.00%
+Test acc mean/std: 95.31% / 0.24%

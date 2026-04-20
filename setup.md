@@ -28,14 +28,18 @@ pip install plotly
 pip install escnn
 ```
  
-> **Note:** If you intend to use GPU acceleration, install the appropriate CUDA-enabled version of PyTorch from [pytorch.org](https://pytorch.org/get-started/locally/) before proceeding with the remaining packages.
- 
 ## 3. Verify Installation
  
 You can verify the core packages were installed correctly by running:
  
 ```bash
 python -c "import torch; print(torch.__version__)"
+```
+
+If you plan to use the filter-visualization notebook, you can also verify the plotting dependencies with:
+
+```bash
+python -c "import matplotlib, seaborn; print('matplotlib and seaborn are ready')"
 ```
 
 ## Known Issue

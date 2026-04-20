@@ -1,0 +1,29 @@
+{
+  "z2": {
+    "val_accuracy_mean": 93.3,
+    "val_accuracy_std": 0.5499999999999972,
+    "test_accuracy_mean": 93.39,
+    "test_accuracy_std": 0.3299999999999983,
+    "test_error_mean": 6.609999999999999,
+    "test_error_std": 0.3299999999999983
+  },
+  "p4": {
+    "val_accuracy_mean": 97.92500000000001,
+    "val_accuracy_std": 0.02499999999999858,
+    "test_accuracy_mean": 97.88499999999999,
+    "test_accuracy_std": 0.035000000000003695,
+    "test_error_mean": 2.115000000000009,
+    "test_error_std": 0.035000000000003695
+  },
+  "p4m": {
+    "val_accuracy_mean": 95.8,
+    "val_accuracy_std": 0.0,
+    "test_accuracy_mean": 95.31,
+    "test_accuracy_std": 0.240000000000002,
+    "test_error_mean": 4.689999999999998,
+    "test_error_std": 0.240000000000002
+  },
+  "delta_test_accuracy_mean_p4_minus_z2": 4.49499999999999,
+  "delta_test_accuracy_mean_p4m_minus_z2": 1.9200000000000017,
+  "delta_test_accuracy_mean_p4m_minus_p4": -2.5749999999999886
+}

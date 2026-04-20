@@ -1,0 +1,6 @@
+=== Z2 Rotated-MNIST Summary ===
+Device: cuda
+Runs: 2
+Params: 207,562
+Val acc mean/std: 93.90% / 0.00%
+Test acc mean/std: 94.21% / 0.10%

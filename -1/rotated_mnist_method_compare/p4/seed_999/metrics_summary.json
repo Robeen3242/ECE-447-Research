@@ -1,0 +1,13 @@
+{
+  "model": "p4",
+  "seed": 999,
+  "params": 91050,
+  "best_val_accuracy_during_training": 97.95,
+  "final_best_checkpoint_val_loss": 0.07667814058065414,
+  "final_best_checkpoint_val_accuracy": 97.95,
+  "final_best_checkpoint_test_loss": 0.06815970953069628,
+  "final_best_checkpoint_test_accuracy": 97.92,
+  "history_file": "./results/rotated_mnist_method_compare/p4/seed_999/train_history.json",
+  "checkpoint_file": "./results/rotated_mnist_method_compare/p4/seed_999/best_model.pth",
+  "predictions_file": "./results/rotated_mnist_method_compare/p4/seed_999/predictions.npz"
+}

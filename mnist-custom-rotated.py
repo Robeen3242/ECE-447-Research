@@ -47,7 +47,7 @@ class Config:
 
     train_size: int = 10000
     val_size: int = 2000
-    test_size: int = 50000
+    test_size: int = 10000
     num_classes: int = 10
 
     deterministic: bool = False
@@ -59,6 +59,7 @@ class Config:
 
     z2_channels = (64, 64, 64, 64)
     p4_widths   = (32, 32, 32, 32)
+    #p4m_widths  = (32, 32, 32, 32)
     p4m_widths  = (24, 24, 24, 24)
 
 
@@ -93,7 +94,229 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
+# 4 layers
+class Z2MNISTCNN(nn.Module):
+    def __init__(self, channels=(64, 64, 64, 64), num_classes=10):
+        super().__init__()
+        c1, c2, c3, c4 = channels
 
+        self.features = nn.Sequential(
+            nn.Conv2d(1, c1, kernel_size=5, padding=2, bias=False),
+            nn.BatchNorm2d(c1),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(c1, c2, kernel_size=5, padding=2, bias=False),
+            nn.BatchNorm2d(c2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(c2, c3, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(c3),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(c3, c4, kernel_size=4, padding=0, bias=False),
+            nn.BatchNorm2d(c4),
+            nn.ReLU(inplace=True),
+        )
+
+        self.head = nn.Linear(c4, num_classes)
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.mean(dim=(2, 3))   # global average pooling
+        return self.head(x)
+
+class P4MNISTCNN(nn.Module):
+    """
+    Late group pooling:
+    keep p4-equivariant features through the hidden layers,
+    then pool over the group only near the end.
+    """
+    def __init__(self, widths=(32, 32, 32, 32), num_classes=10):
+        super().__init__()
+        self.r2_act = gspaces.rot2dOnR2(N=4)
+        self.in_type = enn.FieldType(self.r2_act, [self.r2_act.trivial_repr])
+
+        def reg_type(c):
+            return enn.FieldType(self.r2_act, c * [self.r2_act.regular_repr])
+
+        f1 = reg_type(widths[0])
+        f2 = reg_type(widths[1])
+        f3 = reg_type(widths[2])
+        f4 = reg_type(widths[3])
+
+        # Match Z2 backbone more fairly: only one spatial pool after block 2
+        self.block1 = enn.SequentialModule(
+            enn.R2Conv(self.in_type, f1, kernel_size=5, padding=2, bias=False),
+            enn.InnerBatchNorm(f1),
+            enn.ReLU(f1, inplace=True),
+        )
+        self.block2 = enn.SequentialModule(
+            enn.R2Conv(f1, f2, kernel_size=5, padding=2, bias=False),
+            enn.InnerBatchNorm(f2),
+            enn.ReLU(f2, inplace=True),
+            enn.PointwiseMaxPool(f2, kernel_size=2, stride=2),
+        )
+        self.block3 = enn.SequentialModule(
+            enn.R2Conv(f2, f3, kernel_size=3, padding=1, bias=False),
+            enn.InnerBatchNorm(f3),
+            enn.ReLU(f3, inplace=True),
+        )
+        self.block4 = enn.SequentialModule(
+            enn.R2Conv(f3, f4, kernel_size=4, padding=0, bias=False),
+            enn.InnerBatchNorm(f4),
+            enn.ReLU(f4, inplace=True),
+        )
+
+        self.gpool = enn.GroupPooling(f4)
+        self.head = nn.Linear(widths[3], num_classes)
+
+    def forward(self, x):
+        x = enn.GeometricTensor(x, self.in_type)
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+        x = self.gpool(x)          # late invariance
+        x = x.tensor
+        x = x.mean(dim=(2, 3))     # global average pool over spatial dims
+        return self.head(x)
+
+
+class P4MMNISTCNN(nn.Module):
+    """
+    Late group pooling:
+    keep p4m-equivariant features through the hidden layers,
+    then pool over the group only near the end.
+    """
+    def __init__(self, widths=(24, 24, 24, 24), num_classes=10):
+        super().__init__()
+        self.r2_act = gspaces.flipRot2dOnR2(N=4)
+        self.in_type = enn.FieldType(self.r2_act, [self.r2_act.trivial_repr])
+
+        def reg_type(c):
+            return enn.FieldType(self.r2_act, c * [self.r2_act.regular_repr])
+
+        f1 = reg_type(widths[0])
+        f2 = reg_type(widths[1])
+        f3 = reg_type(widths[2])
+        f4 = reg_type(widths[3])
+
+        # Same pooling schedule as Z2 / P4
+        self.block1 = enn.SequentialModule(
+            enn.R2Conv(self.in_type, f1, kernel_size=5, padding=2, bias=False),
+            enn.InnerBatchNorm(f1),
+            enn.ReLU(f1, inplace=True),
+        )
+        self.block2 = enn.SequentialModule(
+            enn.R2Conv(f1, f2, kernel_size=5, padding=2, bias=False),
+            enn.InnerBatchNorm(f2),
+            enn.ReLU(f2, inplace=True),
+            enn.PointwiseMaxPool(f2, kernel_size=2, stride=2),
+        )
+        self.block3 = enn.SequentialModule(
+            enn.R2Conv(f2, f3, kernel_size=3, padding=1, bias=False),
+            enn.InnerBatchNorm(f3),
+            enn.ReLU(f3, inplace=True),
+        )
+        self.block4 = enn.SequentialModule(
+            enn.R2Conv(f3, f4, kernel_size=4, padding=0, bias=False),
+            enn.InnerBatchNorm(f4),
+            enn.ReLU(f4, inplace=True),
+        )
+
+        self.gpool = enn.GroupPooling(f4)
+        self.head = nn.Linear(widths[3], num_classes)
+
+    def forward(self, x):
+        x = enn.GeometricTensor(x, self.in_type)
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+        x = self.gpool(x)          # late invariance
+        x = x.tensor
+        x = x.mean(dim=(2, 3))
+        return self.head(x)
+
+
+class P4MRotationPoolingMNISTCNN(nn.Module):
+    """
+    Early invariance variant:
+    apply group pooling after each block, so later layers
+    no longer keep the full p4m-equivariant structure.
+
+    Note:
+    In escnn this uses full p4m group pooling after each block.
+    So this is an early-invariance p4m model, not pure
+    rotation-only subgroup pooling.
+    """
+    def __init__(self, widths=(24, 24, 24, 24), num_classes=10):
+        super().__init__()
+        self.r2_act = gspaces.flipRot2dOnR2(N=4)
+        self.in_type = enn.FieldType(self.r2_act, [self.r2_act.trivial_repr])
+
+        def reg_type(c):
+            return enn.FieldType(self.r2_act, c * [self.r2_act.regular_repr])
+
+        def triv_type(c):
+            return enn.FieldType(self.r2_act, c * [self.r2_act.trivial_repr])
+
+        f1 = reg_type(widths[0])
+        f2 = reg_type(widths[1])
+        f3 = reg_type(widths[2])
+        f4 = reg_type(widths[3])
+
+        t1 = triv_type(widths[0])
+        t2 = triv_type(widths[1])
+        t3 = triv_type(widths[2])
+        t4 = triv_type(widths[3])
+
+        # block1: trivial -> regular -> pooled back to trivial
+        self.block1 = enn.SequentialModule(
+            enn.R2Conv(self.in_type, f1, kernel_size=5, padding=2, bias=False),
+            enn.InnerBatchNorm(f1),
+            enn.ReLU(f1, inplace=True),
+            enn.GroupPooling(f1),
+        )
+
+        # block2: trivial -> regular -> pooled back to trivial -> spatial pool
+        self.block2 = enn.SequentialModule(
+            enn.R2Conv(t1, f2, kernel_size=5, padding=2, bias=False),
+            enn.InnerBatchNorm(f2),
+            enn.ReLU(f2, inplace=True),
+            enn.GroupPooling(f2),
+            enn.PointwiseMaxPool(t2, kernel_size=2, stride=2),
+        )
+
+        self.block3 = enn.SequentialModule(
+            enn.R2Conv(t2, f3, kernel_size=3, padding=1, bias=False),
+            enn.InnerBatchNorm(f3),
+            enn.ReLU(f3, inplace=True),
+            enn.GroupPooling(f3),
+        )
+
+        self.block4 = enn.SequentialModule(
+            enn.R2Conv(t3, f4, kernel_size=4, padding=0, bias=False),
+            enn.InnerBatchNorm(f4),
+            enn.ReLU(f4, inplace=True),
+            enn.GroupPooling(f4),
+        )
+
+        self.head = nn.Linear(widths[3], num_classes)
+
+    def forward(self, x):
+        x = enn.GeometricTensor(x, self.in_type)
+        x = self.block1(x)         # now trivial reps
+        x = self.block2(x)         # now trivial reps
+        x = self.block3(x)         # now trivial reps
+        x = self.block4(x)         # now trivial reps
+        x = x.tensor
+        x = x.mean(dim=(2, 3))
+        return self.head(x)
+
+
+"Custom Dataset wrapper that applies fixed random rotations to the base MNIST images according to the provided indices and angles. This allows us to create train/val/test splits with different random rotations while using the same underlying MNIST images for train and val. The test set is based on the standard MNIST test split, also with its own set of random rotations."
 class FixedRotatedMNIST(Dataset):
     def __init__(self, base_dataset, indices, angles):
         self.base = base_dataset
@@ -117,6 +340,8 @@ class FixedRotatedMNIST(Dataset):
         x = TF.normalize(x, mean=[0.1307], std=[0.3081])
         return x, int(label)
 
+
+# Function to create the train/val/test splits of the rotated MNIST dataset with fixed random rotations per image. The same base MNIST images are used for train and val, but with different random rotations. The test set is based on the standard MNIST test split, also with its own set of random rotations.
 def build_rotated_mnist_splits(cfg: Config):
     train_base = torchvision.datasets.MNIST(
         root=cfg.data_root,
@@ -167,108 +392,7 @@ def make_loader(dataset, batch_size, shuffle, num_workers, seed):
         generator=generator if shuffle else None,
     )
 
-# 4 layers
-class Z2MNISTCNN(nn.Module):
-    def __init__(self, channels=(64, 64, 64, 64), num_classes=10):
-        super().__init__()
-        c1, c2, c3, c4 = channels
 
-        self.features = nn.Sequential(
-            nn.Conv2d(1, c1, kernel_size=5, padding=2, bias=False),
-            nn.BatchNorm2d(c1),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(c1, c2, kernel_size=5, padding=2, bias=False),
-            nn.BatchNorm2d(c2),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(c2, c3, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(c3),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(c3, c4, kernel_size=4, padding=0, bias=False),
-            nn.BatchNorm2d(c4),
-            nn.ReLU(inplace=True),
-        )
-
-        self.head = nn.Linear(c4, num_classes)
-
-    def forward(self, x):
-        x = self.features(x)
-        x = x.mean(dim=(2, 3))   # global average pooling
-        return self.head(x)
-
-# Generic group-equivariant CNN for both P4 and P4M, with configurable widths and group space
-class GroupMNISTCNN(nn.Module):
-    def __init__(self, gspace, widths=(32, 32, 32, 32), num_classes=10):
-        super().__init__()
-        self.r2_act = gspace
-        self.in_type = enn.FieldType(self.r2_act, [self.r2_act.trivial_repr])
-
-        def feat_type(c):
-            return enn.FieldType(self.r2_act, c * [self.r2_act.regular_repr])
-
-        f1 = feat_type(widths[0])
-        f2 = feat_type(widths[1])
-        f3 = feat_type(widths[2])
-        f4 = feat_type(widths[3])
-
-        self.block1 = enn.SequentialModule(
-            enn.R2Conv(self.in_type, f1, kernel_size=5, padding=2, bias=False),
-            enn.InnerBatchNorm(f1),
-            enn.ReLU(f1, inplace=True),
-            enn.PointwiseMaxPool(f1, kernel_size=2, stride=2),
-        )
-        self.block2 = enn.SequentialModule(
-            enn.R2Conv(f1, f2, kernel_size=5, padding=2, bias=False),
-            enn.InnerBatchNorm(f2),
-            enn.ReLU(f2, inplace=True),
-            enn.PointwiseMaxPool(f2, kernel_size=2, stride=2),
-        )
-        self.block3 = enn.SequentialModule(
-            enn.R2Conv(f2, f3, kernel_size=3, padding=1, bias=False),
-            enn.InnerBatchNorm(f3),
-            enn.ReLU(f3, inplace=True),
-        )
-        self.block4 = enn.SequentialModule(
-            enn.R2Conv(f3, f4, kernel_size=4, padding=0, bias=False),
-            enn.InnerBatchNorm(f4),
-            enn.ReLU(f4, inplace=True),
-        )
-
-        # Global pooling over the group dimension, leaving only the spatial dimensions
-        self.gpool = enn.GroupPooling(f4)
-        self.head = nn.Linear(widths[3], num_classes)
-
-    def forward(self, x):
-        x = enn.GeometricTensor(x, self.in_type)
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
-        x = self.block4(x)
-        x = self.gpool(x)
-        x = x.tensor
-        x = x.mean(dim=(2, 3))
-        return self.head(x)
-
-
-class P4MNISTCNN(GroupMNISTCNN):
-    def __init__(self, widths=(32, 32, 32, 32), num_classes=10):
-        super().__init__(
-            gspace=gspaces.rot2dOnR2(N=4), #N=4 for 90-degree rotations, 8 for 45-degree rotations
-            widths=widths,
-            num_classes=num_classes,
-        )
-
-
-class P4MMNISTCNN(GroupMNISTCNN):
-    def __init__(self, widths=(24, 24, 24, 24), num_classes=10):
-        super().__init__(
-            gspace=gspaces.flipRot2dOnR2(N=4), #N=4 for 90-degree rotations + reflections, 8 for 45-degree rotations + reflections  
-            widths=widths,
-            num_classes=num_classes,
-        )
 
 # Helper functions for training and evaluation
 def count_parameters(model):
@@ -452,7 +576,7 @@ def train_one_seed(model_name, model_builder, cfg: Config, seed: int, trainset, 
 
     return result
 
-
+# Aggregate results across seeds for a given model, compute mean and std of val/test accuracies, and save a summary JSON and text file with the results and aggregate statistics.
 def summarize_model(cfg: Config, model_name: str, results):
     test_accs = [r["final_best_checkpoint_test_accuracy"] for r in results]
     val_accs = [r["final_best_checkpoint_val_accuracy"] for r in results]
@@ -495,6 +619,7 @@ def summarize_model(cfg: Config, model_name: str, results):
 
     return summary
 
+# Compare the aggregate results across different models, compute differences in test accuracy means, and save a comparison summary JSON and markdown file with the results.
 def save_comparison(cfg: Config, summaries: dict):
     comparison = {name: summary["aggregate"] for name, summary in summaries.items()}
 
@@ -798,7 +923,7 @@ def generate_report_artifacts(cfg: Config, models):
 
     print(f"\nSaved report artifacts to: {report_dir}")
 
-def run_for_model(cfg: Config, model_name: str):
+def run_for_model(cfg: Config, model_name: str, trainset=None, valset=None, testset=None):
     if model_name == "z2":
         builder = lambda: Z2MNISTCNN(
             channels=cfg.z2_channels,
@@ -814,18 +939,24 @@ def run_for_model(cfg: Config, model_name: str):
             widths=cfg.p4m_widths,
             num_classes=cfg.num_classes
         )
+    elif model_name == "p4m_rp":
+        builder = lambda: P4MRotationPoolingMNISTCNN(
+            widths=cfg.p4m_widths,
+            num_classes=cfg.num_classes
+        )
     else:
-        raise ValueError("model_name must be one of: z2, p4, p4m")
+        raise ValueError("model_name must be one of: z2, p4, p4m, p4m_rp")
 
-    # trainset, valset, testset = build_prerotated_mnist_splits(cfg.prerotated_npz_path)
-    trainset, valset, testset = build_rotated_mnist_splits(cfg)
+    if trainset is None or valset is None or testset is None:
+        trainset, valset, testset = build_rotated_mnist_splits(cfg)
+
     results = []
     for seed in cfg.seeds:
         results.append(train_one_seed(model_name, builder, cfg, seed, trainset, valset, testset))
 
     return summarize_model(cfg, model_name, results)
 
-
+# Main function to parse command-line arguments, set up the configuration, run the experiments for the requested models, and generate the report artifacts.
 def main():
     parser = argparse.ArgumentParser(
         description="Z2 / P4 / P4M comparison on custom Rotated-MNIST"
@@ -834,7 +965,7 @@ def main():
         "-m", "--model",
         type=str,
         default="all",
-        choices=["z2", "p4", "p4m", "all"],
+        choices=["z2", "p4", "p4m", "p4m_rp", "all"],
         help="Run one model or all models"
     )
     parser.add_argument("--epochs", type=int, default=CFG.epochs)
@@ -859,12 +990,17 @@ def main():
     print(f"Output: {cfg.out_dir}")
     print(f"Seeds: {cfg.seeds}")
 
-    requested = ["z2", "p4", "p4m"] if args.model == "all" else [args.model]
+    requested = ["z2", "p4", "p4m", "p4m_rp"] if args.model == "all" else [args.model]
 
     summaries = {}
-    for model_name in requested:
-        summaries[model_name] = run_for_model(cfg, model_name)
+    # for model_name in requested:
+    #     summaries[model_name] = run_for_model(cfg, model_name)
 
+    trainset, valset, testset = build_rotated_mnist_splits(cfg)
+
+    for model_name in requested:
+        summaries[model_name] = run_for_model(cfg, model_name, trainset, valset, testset)
+    
     if len(summaries) >= 2:
         save_comparison(cfg, summaries)
         print("\nSaved cross-model comparison summary.")

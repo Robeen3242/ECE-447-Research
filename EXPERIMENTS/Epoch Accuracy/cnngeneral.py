@@ -1,5 +1,6 @@
 import json
 import os
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -108,6 +109,7 @@ class Net(nn.Module):
             padding = kernel_size // 2
             layers.extend([
                 nn.Conv2d(current_channels, out_channels, kernel_size, stride=stride, padding=padding),
+                nn.BatchNorm2d(out_channels),
                 nn.ReLU(inplace=True),
             ])
             current_channels = out_channels
@@ -122,7 +124,18 @@ class Net(nn.Module):
         return x
 
 
-def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0.9, seed=42):
+def train(
+    net,
+    trainloader=None,
+    valloader=None,
+    epochs=30,
+    lr=0.01,
+    momentum=0.9,
+    weight_decay=5e-4,
+    seed=42,
+    step_size=10,
+    gamma=0.1,
+):
     if trainloader is None or valloader is None:
         trainset, testset = get_cifar10_datasets()
         g = torch.Generator()
@@ -134,8 +147,11 @@ def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0
 
     criterion = nn.CrossEntropyLoss()
     val_criterion = nn.CrossEntropyLoss(reduction='sum')
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
+    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     history = {'train_loss': [], 'val_loss': [], 'val_accuracy': []}
+    best_val_accuracy = float('-inf')
+    best_state = None
 
     for epoch in range(epochs):
         running_loss = 0.0
@@ -169,10 +185,17 @@ def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0
         val_accuracy = 100.0 * correct / total
         history['val_loss'].append(float(avg_val_loss))
         history['val_accuracy'].append(float(val_accuracy))
+        if val_accuracy > best_val_accuracy:
+            best_val_accuracy = val_accuracy
+            best_state = copy.deepcopy(net.state_dict())
         print(
             f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f} '
             f'Val Loss: {avg_val_loss:.4f} Val Acc: {val_accuracy:.2f}%'
         )
+        scheduler.step()
+
+    if best_state is not None:
+        net.load_state_dict(best_state)
 
     return history
 
@@ -242,8 +265,11 @@ def save_results(
             'epochs': len(history['train_loss']),
             'batch_size': batch_size,
             'optimizer': 'SGD',
-            'lr': 0.001,
+            'lr': 0.01,
             'momentum': 0.9,
+            'weight_decay': 5e-4,
+            'lr_step_size': 10,
+            'lr_gamma': 0.1,
             'train_rotation_degrees': train_rotation_degrees,
             'test_rotation_degrees': test_rotation_degrees,
             'num_conv_layers': len(conv_filters),

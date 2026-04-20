@@ -109,6 +109,7 @@ class Net(nn.Module):
             padding = kernel_size // 2
             layers.extend([
                 nn.Conv2d(current_channels, out_channels, kernel_size, stride=stride, padding=padding),
+                nn.BatchNorm2d(out_channels),
                 nn.ReLU(inplace=True),
             ])
             current_channels = out_channels

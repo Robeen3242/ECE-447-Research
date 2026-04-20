@@ -47,6 +47,19 @@ def create_dataloader(dataset, batch_size=batch_size, shuffle=False, num_workers
     return torch.utils.data.DataLoader(dataset, **loader_kwargs)
 
 
+def create_train_val_loaders(trainset, batch_size=batch_size, val_fraction=0.1, seed=42):
+    val_size = int(len(trainset) * val_fraction)
+    if val_size <= 0:
+        raise ValueError("val_fraction is too small for the dataset size")
+    train_size = len(trainset) - val_size
+    g = torch.Generator()
+    g.manual_seed(seed)
+    train_subset, val_subset = torch.utils.data.random_split(trainset, [train_size, val_size], generator=g)
+    trainloader = create_dataloader(train_subset, batch_size=batch_size, shuffle=True, generator=g)
+    valloader = create_dataloader(val_subset, batch_size=batch_size, shuffle=False)
+    return trainloader, valloader, train_size, val_size
+
+
 class GCNN(nn.Module):
     """
     p4-equivariant All-CNN-style network aligned with the CIFAR-10 setup in
@@ -114,18 +127,13 @@ class GCNN(nn.Module):
 
 def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0.9, seed=42):
     if trainloader is None or valloader is None:
-        trainset, testset = get_cifar10_datasets()
-        g = torch.Generator()
-        g.manual_seed(seed)
-        if trainloader is None:
-            trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True, generator=g)
-        if valloader is None:
-            valloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
+        trainset, _ = get_cifar10_datasets()
+        trainloader, valloader, _, _ = create_train_val_loaders(trainset, batch_size=batch_size, seed=seed)
 
     criterion = nn.CrossEntropyLoss()
     val_criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
-    history = {'train_loss': [], 'val_loss': [], 'test_accuracy': []}
+    history = {'train_loss': [], 'val_loss': [], 'val_accuracy': []}
 
     for epoch in range(epochs):
         net.train()
@@ -157,12 +165,12 @@ def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0
 
         avg_val_loss = val_loss / val_samples
         history['val_loss'].append(float(avg_val_loss))
-        test_accuracy = 100.0 * correct / val_samples
-        history['test_accuracy'].append(float(test_accuracy))
+        val_accuracy = 100.0 * correct / val_samples
+        history['val_accuracy'].append(float(val_accuracy))
 
         print(
             f'Epoch [{epoch + 1}/{epochs}]  Train Loss: {avg_train_loss:.3f}  '
-            f'Val Loss: {avg_val_loss:.4f}  Test Acc: {test_accuracy:.2f}%'
+            f'Val Loss: {avg_val_loss:.4f}  Val Acc: {val_accuracy:.2f}%'
         )
 
     return history
@@ -215,7 +223,8 @@ def save_results(
     test_acc,
     per_class,
     total_params,
-    train_size=50000,
+    train_size=45000,
+    val_size=5000,
     test_size=10000,
     out_dir='results/gcnngeneral_report',
 ):
@@ -236,6 +245,7 @@ def save_results(
         },
         'split': {
             'train': train_size,
+            'val': val_size,
             'test': test_size,
         },
         'test_metrics': {
@@ -257,15 +267,13 @@ def save_results(
 if __name__ == '__main__':
     set_seed(42)
     trainset, testset = get_cifar10_datasets()
-    g = torch.Generator()
-    g.manual_seed(42)
-    trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True, generator=g)
+    trainloader, valloader, train_size, val_size = create_train_val_loaders(trainset, batch_size=batch_size, seed=42)
     testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
     net = GCNN().to(device)
     total_params = sum(p.numel() for p in net.parameters())
     print(f'Total parameters: {total_params:,}')
-    history = train(net, trainloader=trainloader, valloader=testloader, epochs=30)
+    history = train(net, trainloader=trainloader, valloader=valloader, epochs=30)
     test_loss, test_acc, per_class = evaluate(net, testloader=testloader)
-    save_results(history, test_loss, test_acc, per_class, total_params, train_size=len(trainset), test_size=len(testset))
+    save_results(history, test_loss, test_acc, per_class, total_params, train_size=train_size, val_size=val_size, test_size=len(testset))
     torch.save(net.state_dict(), 'gcnngeneral.pth')
 

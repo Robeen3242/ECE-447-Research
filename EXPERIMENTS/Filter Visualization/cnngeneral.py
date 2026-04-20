@@ -65,6 +65,19 @@ def create_dataloader(dataset, batch_size=batch_size, shuffle=False, num_workers
     return torch.utils.data.DataLoader(dataset, **loader_kwargs)
 
 
+def create_train_val_loaders(trainset, batch_size=batch_size, val_fraction=0.1, seed=42):
+    val_size = int(len(trainset) * val_fraction)
+    if val_size <= 0:
+        raise ValueError("val_fraction is too small for the dataset size")
+    train_size = len(trainset) - val_size
+    g = torch.Generator()
+    g.manual_seed(seed)
+    train_subset, val_subset = torch.utils.data.random_split(trainset, [train_size, val_size], generator=g)
+    trainloader = create_dataloader(train_subset, batch_size=batch_size, shuffle=True, generator=g)
+    valloader = create_dataloader(val_subset, batch_size=batch_size, shuffle=False)
+    return trainloader, valloader, train_size, val_size
+
+
 class Net(nn.Module):
     """
     Z2 CNN baseline aligned more closely with the CIFAR-10 setup in
@@ -109,17 +122,20 @@ class Net(nn.Module):
         return x
 
 
-def train(net, trainloader=None, testloader=None, epochs=30, lr=0.001, momentum=0.9):
-    if trainloader is None or testloader is None:
+def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0.9, seed=42):
+    if trainloader is None or valloader is None:
         trainset, testset = get_cifar10_datasets()
+        g = torch.Generator()
+        g.manual_seed(seed)
         if trainloader is None:
-            trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
-        if testloader is None:
-            testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
+            trainloader, valloader, _, _ = create_train_val_loaders(trainset, batch_size=batch_size, seed=seed)
+        elif valloader is None:
+            _, valloader, _, _ = create_train_val_loaders(trainset, batch_size=batch_size, seed=seed)
 
     criterion = nn.CrossEntropyLoss()
+    val_criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
-    history = {'train_loss': [], 'test_accuracy': []}
+    history = {'train_loss': [], 'val_loss': [], 'val_accuracy': []}
 
     for epoch in range(epochs):
         running_loss = 0.0
@@ -137,19 +153,26 @@ def train(net, trainloader=None, testloader=None, epochs=30, lr=0.001, momentum=
         history['train_loss'].append(float(avg_loss))
 
         net.eval()
+        val_loss = 0.0
         correct = 0
         total = 0
         with torch.no_grad():
-            for images, labels in testloader:
+            for images, labels in valloader:
                 images, labels = images.to(device), labels.to(device)
                 outputs = net(images)
+                val_loss += val_criterion(outputs, labels).item()
                 _, predictions = torch.max(outputs, 1)
                 total += labels.size(0)
                 correct += (predictions == labels).sum().item()
 
-        test_accuracy = 100.0 * correct / total
-        history['test_accuracy'].append(float(test_accuracy))
-        print(f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f} Test Acc: {test_accuracy:.2f}%')
+        avg_val_loss = val_loss / total
+        val_accuracy = 100.0 * correct / total
+        history['val_loss'].append(float(avg_val_loss))
+        history['val_accuracy'].append(float(val_accuracy))
+        print(
+            f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f} '
+            f'Val Loss: {avg_val_loss:.4f} Val Acc: {val_accuracy:.2f}%'
+        )
 
     return history
 
@@ -200,7 +223,8 @@ def save_results(
     test_acc,
     per_class,
     net=None,
-    train_size=50000,
+    train_size=45000,
+    val_size=5000,
     test_size=10000,
     train_rotation_degrees=0,
     test_rotation_degrees=0,
@@ -227,6 +251,7 @@ def save_results(
         },
         'split': {
             'train': train_size,
+            'val': val_size,
             'test': test_size,
         },
         'test_metrics': {
@@ -253,11 +278,11 @@ if __name__ == '__main__':
     train_transform = build_cifar10_transform(train=True, rotation_degrees=train_rotation_degrees)
     test_transform = build_cifar10_transform(train=False, rotation_degrees=test_rotation_degrees)
     trainset, testset = get_cifar10_datasets(train_transform=train_transform, test_transform=test_transform)
-    trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
+    trainloader, valloader, train_size, val_size = create_train_val_loaders(trainset, batch_size=batch_size, seed=42)
     testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
     net = Net().to(device)
     print(f'Total parameters: {sum(p.numel() for p in net.parameters()):,}')
-    history = train(net, trainloader=trainloader, testloader=testloader, epochs=30)
+    history = train(net, trainloader=trainloader, valloader=valloader, epochs=30)
     test_loss, test_acc, per_class = evaluate(net, testloader=testloader)
     save_results(
         history,
@@ -265,7 +290,8 @@ if __name__ == '__main__':
         test_acc,
         per_class,
         net=net,
-        train_size=len(trainset),
+        train_size=train_size,
+        val_size=val_size,
         test_size=len(testset),
         train_rotation_degrees=train_rotation_degrees,
         test_rotation_degrees=test_rotation_degrees,

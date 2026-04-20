@@ -109,14 +109,17 @@ class Net(nn.Module):
         return x
 
 
-def train(net, trainloader=None, epochs=30, lr=0.001, momentum=0.9):
-    if trainloader is None:
-        trainset, _ = get_cifar10_datasets()
-        trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
+def train(net, trainloader=None, testloader=None, epochs=30, lr=0.001, momentum=0.9):
+    if trainloader is None or testloader is None:
+        trainset, testset = get_cifar10_datasets()
+        if trainloader is None:
+            trainloader = create_dataloader(trainset, batch_size=batch_size, shuffle=True)
+        if testloader is None:
+            testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
-    history = {'train_loss': []}
+    history = {'train_loss': [], 'test_accuracy': []}
 
     for epoch in range(epochs):
         running_loss = 0.0
@@ -132,7 +135,21 @@ def train(net, trainloader=None, epochs=30, lr=0.001, momentum=0.9):
 
         avg_loss = running_loss / len(trainloader)
         history['train_loss'].append(float(avg_loss))
-        print(f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f}')
+
+        net.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for images, labels in testloader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = net(images)
+                _, predictions = torch.max(outputs, 1)
+                total += labels.size(0)
+                correct += (predictions == labels).sum().item()
+
+        test_accuracy = 100.0 * correct / total
+        history['test_accuracy'].append(float(test_accuracy))
+        print(f'Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.3f} Test Acc: {test_accuracy:.2f}%')
 
     return history
 
@@ -240,7 +257,7 @@ if __name__ == '__main__':
     testloader = create_dataloader(testset, batch_size=batch_size, shuffle=False)
     net = Net().to(device)
     print(f'Total parameters: {sum(p.numel() for p in net.parameters()):,}')
-    history = train(net, trainloader=trainloader, epochs=30)
+    history = train(net, trainloader=trainloader, testloader=testloader, epochs=30)
     test_loss, test_acc, per_class = evaluate(net, testloader=testloader)
     save_results(
         history,

@@ -124,7 +124,7 @@ def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0
     criterion = nn.CrossEntropyLoss()
     val_criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
-    history = {'train_loss': [], 'val_loss': []}
+    history = {'train_loss': [], 'val_loss': [], 'test_accuracy': []}
 
     for epoch in range(epochs):
         net.train()
@@ -144,16 +144,25 @@ def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0
         net.eval()
         val_loss = 0.0
         val_samples = 0
+        correct = 0
         with torch.no_grad():
             for inputs, labels in valloader:
                 inputs, labels = inputs.to(device), labels.to(device)
-                val_loss += val_criterion(net(inputs), labels).item()
+                outputs = net(inputs)
+                val_loss += val_criterion(outputs, labels).item()
                 val_samples += labels.size(0)
+                _, predictions = torch.max(outputs, 1)
+                correct += (predictions == labels).sum().item()
 
         avg_val_loss = val_loss / val_samples
         history['val_loss'].append(float(avg_val_loss))
+        test_accuracy = 100.0 * correct / val_samples
+        history['test_accuracy'].append(float(test_accuracy))
 
-        print(f'Epoch [{epoch + 1}/{epochs}]  Train Loss: {avg_train_loss:.3f}  Val Loss: {avg_val_loss:.4f}')
+        print(
+            f'Epoch [{epoch + 1}/{epochs}]  Train Loss: {avg_train_loss:.3f}  '
+            f'Val Loss: {avg_val_loss:.4f}  Test Acc: {test_accuracy:.2f}%'
+        )
 
     return history
 

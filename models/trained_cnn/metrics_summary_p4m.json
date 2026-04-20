@@ -1,0 +1,43 @@
+{
+  "config": {
+    "model": "GCNN (p4m)",
+    "total_params": 824896,
+    "epochs": 30,
+    "batch_size": 64,
+    "optimizer": "SGD",
+    "lr": 0.001,
+    "momentum": 0.9,
+    "num_conv_layers": 9,
+    "filters_per_conv_layer": [
+      32,
+      32,
+      32,
+      64,
+      64,
+      64,
+      64,
+      64,
+      10
+    ]
+  },
+  "split": {
+    "train": 50000,
+    "test": 10000
+  },
+  "test_metrics": {
+    "test_loss": 1.025508620262146,
+    "test_accuracy": 64.64,
+    "per_class_accuracy": {
+      "plane": 55.7,
+      "car": 73.5,
+      "bird": 51.4,
+      "cat": 34.2,
+      "deer": 63.1,
+      "dog": 61.2,
+      "frog": 78.9,
+      "horse": 73.5,
+      "ship": 84.8,
+      "truck": 70.1
+    }
+  }
+}

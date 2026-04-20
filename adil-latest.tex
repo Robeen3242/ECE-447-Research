@@ -1,0 +1,296 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{setspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{enumitem}
+\usepackage{gensymb}
+\usepackage{mathtools}
+\usepackage{flexisym}
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage[preprint]{neurips_2025}
+
+
+\title{ECE 447 Project}
+
+\author{
+  Kavin Kumaran, Adil Tapal, Robin Liu, Hasan Zia \\
+  University of Alberta, Department of Electrical and Computer Engineering \\
+  116 St \& 85 Ave, Edmonton, AB T6G 2R3 \\
+  \texttt{kavinvas@ualberta.ca, atapal@ualberta.ca, robin9@ualberta.ca, hasanfar@ualberta.ca}
+}
+
+\date{April 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+    The central challenge in image classification is the fact that the same image can appear in different orientations, positions, and reflections. A handwritten digit "6" rotated 90\degree\ is still a "6," yet a standard convolutional neural network (CNN) must learn this equivalence from data, needing large quantaties of training examples to execute this reliably.
+    
+    Cohen and Welling [1] address this shortcoming directly. Their paper introduce \emph{Group Equivariant Convolutional Networks} (G-CNNs), a generalisation of standard CNNs that explicitly encodes the symmetries of a task into the architecture itself. When we replace the standard planar convolution with a \emph{group convolution} shown over a chosen symmetry group $G$, the network will become equivariant to all transformations in $G$ by design instead of memorization. Now networks can share weights across spatial positions (like ordinary convolutions) and across orientations and reflections, which increases the effective degree of parameter sharing.
+
+    In this report, we can explain the core idea is the paper on top of the mathematical G-CNNs. We can begin with a brief overview of convolutional neural networks and group theory separately, which provides the necessary background to understand the G-convolution operation. We are then able to describe our reproduction experiments, offer a critical evaluation of the paper, and close with individual reflections from the group member.
+\section{What is a convolutional neural network?}
+    A convolutional neural network (CNN) is a specific kind of neural network. To begin with, we give a brief overview of neural networks. In classical machine learning, models are trained on input data to then make predictions on similar data in the future. To train such models, one must manually determine what is deemed interesting - these are referred to as the features of the data. Neural networks aim to automate the feature extraction process. When a neural network is given data, the data is put through different layers of computational neurons, which apply functions on the data. The specific functions used differ based on the type of neural network being used. This is where convolutional neural networks come in - the layers found within CNNs are inspired by the visual pathways within the human brain. As one may assume, CNNs are thus often used in computer vision contexts, to analyse and classify different images. Moreover, CNNs apply the following functions:
+    \begin{enumerate}
+        \item Convolution/correlation;
+        \item Pooling;
+        \item Batch normalization;
+        \item Flattening; and
+        \item Softmax.
+    \end{enumerate}
+    For the sake of our discussion, we focus primarily on convolution/correlation and a specific form of pooling known as max-pooling. Informally, convolution applies a sort of filter (a weighted average) on a number of pixels to combine them into one "blurred" pixel. If \(l \in \mathbb{N}\) is the layer, and the set of feature maps are of the form \(f: \mathbb{Z}^2 \to \mathbb{R}^{K^l}\), a convolution will convolve them with a set of \(K^{l + 1}\) filters of the form \(\psi^i: \mathbb{Z}^2 \to \mathbb{R}^{K^l}\), which is formally expressed as the following function:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{R}, x \mapsto [f * \psi^i](x) := \sum_{y \in \mathbb{Z}^2} \sum_{k = 1}^{K^l} f_k(y)\psi^i(x - y).
+    \end{align*}
+    Notice that the input to the filters is reversed (the input of the feature maps is \(y\), but for the filters, it is \(x\) shifted by the inverse [i.e., negative] of \(y\)). Correlation is defined similarly, with the only difference being that the input is not reversed:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{R}, x \mapsto [f \star \psi^i](x) := \sum_{y \in \mathbb{Z}^2} \sum_{k = 1}^{K^l} f_k(y)\psi^i(y - x).
+    \end{align*}
+    Pooling also reduces the number of pixels, but instead of requiring filter functions, it is done solely with feature maps. Max-pooling, in particular, finds the maximum value of a given feature map over a so-called pooling domain, which is obtained from the input. It is defined as follows: suppose \(U \subset \mathbb{Z}^2\) is a pooling domain, the set \(n + U = \{n + u \hspace{0.5 mm}|\hspace{0.5 mm} n \in \mathbb{Z}^2, u \in U\}\) is a translation of \(U\), and \(f: \mathbb{Z}^2 \to \mathbb{R}\) is a feature map. Then, the max-pooling operation is given by some pooling operator \(P\) such that
+    \begin{align*}
+        Pf(n) := \max_{k \in (n + U)} f(k).
+    \end{align*}
+    In other words, max-pooling finds the greatest value of a feature map \(f\) over some translation of a pooling domain \(n + U\). Moreover, notice that these functions are defined with the domain of \(\mathbb{Z}^2\). As will be explained in more detail later, this set can be thought of as being made up of 2D translations. As such, as an example, suppose a CNN is trained to recognise and classify images of dogs, with the dogs being in the centre of all of the images. This CNN would be able to correctly classify images of dogs that now have the dogs on the sides rather than the centres. This is because these images essentially have the dogs translated away from the centre; such translations may be "recognised," as \(\mathbb{Z}^2\) is comprised of them. However, the same cannot be said for rotated or reflected images of dogs; to account for this, one would need to independently train the CNN on rotated and reflected photos (this is known as data augmentation). Cohen et al. address this issue by generalising \(\mathbb{Z}^2\), turning to concepts from a field in mathematics known as group theory.
+\section{What is a group?}
+    A group is an algebraic structure. Formally, it is a tuple \(G = (S, \circ)\) (where \(S\) is a set and \(\circ: S \times S \to S\) is a binary operation) that satisfies the following axiomatic properties:
+    \begin{enumerate}
+        \item \(S\) is closed under \(\circ\), i.e. for every \(s_1, s_2 \in S\), we have that \(s_1 \circ s_2 \in S\);
+        \item \(\circ\) is associative, i.e. for every \(s_1, s_2, s_3 \in S\), we have that \\
+        \((s_1 \circ s_2) \circ s_3 = s_1 \circ (s_2 \circ s_3)\);
+        \item There exists an identity element \(e \in S\) such that for every \(s \in S\), we have that \(e \circ s = s \circ e = s\); and
+        \item For every \(s \in S\), there exists an inverse element \(s^{-1} \in S\) such that we have \(s \circ s^{-1} = s^{-1} \circ s = e\).
+    \end{enumerate}
+    While this is the proper definition, this may appear daunting and unintuitive - what sort of structure actually is a group, and what makes groups useful? A more intuitive description of groups would be that they describe sets of symmetries. They represent the different actions that may be taken on some object which leave the object looking the same. For example, consider a non-square rectangle. With this more general notion of a symmetry, we consider the following to be the symmetries of a non-square rectangle (which is known as the Klein four-group \(K_4\)):
+    \begin{enumerate}
+        \item Doing nothing (this is the identity symmetry \(e\));
+        \item A \(180^{\circ}\) counter-clockwise rotation;
+        \item The vertical reflection; and
+        \item The horizontal reflection.
+    \end{enumerate}
+    While a proof will not be given, all groups satisfying the formal definition may be expressed equivalently as a set of symmetries. (This follows due to a result in group theory known as Cayley's Theorem.) Moreover, this description illuminates the significance of groups - group theory allows us to formally study the behaviour of symmetries. As such, groups naturally may be used when training convolutional neural networks on understanding and classifying images. In particular, they allow us to incorporate rotations and reflections in the domains of our functions, removing the need to use data augmentation to account for these symmetries.
+
+\section{The groups \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\)}
+    Cohen et al. discuss three particular groups: \((\mathbb{Z}^2, +)\), \(p4\), and \(p4m\). Informally, \((\mathbb{Z}^2, +)\) is the group of all 2D integer translations; \(p4\) is the group of 2D integer translations along with all \(90^\circ\) rotations about any centre of rotation; and \(p4m\) is the group of 2D integer translations, \(90^\circ\) rotations about any centre of rotation, and mirror reflections. As discussed above, \(\mathbb{Z}^2\) is the domain for the convolution/correlation and max-pooling functions used by traditional CNNs. As such, CNNs are able to recognise and correctly classify translated images. However, they require data augmentation to be able to do the same with rotations and reflections. To incorporate rotations, \(p4\) is introduced. Elements of this group are parametrised by the following function:
+    \begin{align*}
+        \{0, 1, 2, 3\} \times \mathbb{Z} \times \mathbb{Z} \to \mathbb{Z}^{3 \times 3}, (r, u, v) \mapsto g(r, u, v) := \begin{bmatrix}
+            \cos\left(\frac{r\pi}{2}\right) & -\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix}.
+    \end{align*}
+    As a group, \(p4\) includes a group binary operation, which in this case is matrix multiplication. It may be verified that the group axioms mentioned in section 3 are satisfied by \(p4\). Moreover, suppose \((u', v') \in \mathbb{Z}^2\) represents the position of a pixel. Then, an element in \(p4\) may act on \((u', v')\) as follows:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{Z}^2, (u', v') \mapsto h\left(\begin{bmatrix}
+            \cos\left(\frac{r\pi}{2}\right) & -\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix} \cdot \begin{bmatrix}
+            u' \\
+            v' \\
+            1
+        \end{bmatrix}\right),
+    \end{align*}
+    where \(h\) is the projection function given by
+    \begin{align*}
+        \mathbb{Z}^3 \to \mathbb{Z}^2, (x, y, z) \mapsto h(x, y, z) := (x, y).
+    \end{align*}
+    \(p4m\) further extends to include reflections. Similarly to \(p4\), we may parametrise elements of \(p4m\), which is given by
+    \begin{align*}
+        \{0, 1\} \times \{0, 1, 2, 3\} \times \mathbb{Z} \times \mathbb{Z} \to \mathbb{Z}^{3 \times 3}, (m, r, u, v) \mapsto g(m, r, u, v) := \begin{bmatrix}
+            (-1)^m\cos\left(\frac{r\pi}{2}\right) & -(-1)^m\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix}.
+    \end{align*}
+    Again, the group binary operation is \(p4m\); this satisfies the group axioms mentioned previously. Once more, if \((u', v') \in \mathbb{Z}^2\) represents the position of a pixel, then an element of \(p4m\) acts on \((u', v')\) as follows:
+    \begin{align*}
+        \mathbb{Z}^2 \to \mathbb{Z}^2, (u', v') \mapsto h\left(\begin{bmatrix}
+            (-1)^m\cos\left(\frac{r\pi}{2}\right) & -(-1)^m\sin\left(\frac{r\pi}{2}\right) & u \\
+            \sin\left(\frac{r\pi}{2}\right) & \cos\left(\frac{r\pi}{2}\right) & v \\
+            0 & 0 & 1
+        \end{bmatrix} \cdot \begin{bmatrix}
+            u' \\
+            v' \\
+            1
+        \end{bmatrix}\right).
+    \end{align*}
+
+\section{Summary of Cohen et al.\ (2016)}
+\subsection{The core idea: equivariance}
+
+The central idea behind Cohen and Welling is that standard CNNs are equivariant only to translations, and this specific limitation causes them to waste parameters showing that this can learn many copier of the same filter at different orientations. A map $\Phi$ is said to be equivariant with respect to a group $G$ if
+\[
+\Phi(T_g x) = T_g' \Phi(x) \quad \forall\, g \in G,
+\]
+where $T_g$ and $T_g'$ are the actions of the group element $g$ on the input and output spaces respectively. Intuitively, equivalence means that transforming the input and then applying the map gives the same result as applying the maps first and then transforming the output the transformation then passes through the layer. \\ \\
+Notice that, as previously described, traditional CNNs do not require data augmentation to correctly classify images that translate certain features that they have learnt. This is because CNNs are translation-equivariant. In particular, we have that
+\begin{align*}
+    \Phi(T_n x) = T_n' \Phi(x) \quad \forall\, n \in \mathbb{Z}^2,
+\end{align*}
+i.e. transformations corresponding to elements of \(\mathbb{Z}^2\) (which would now be translations) commute with the map \(\Phi\). Cohen et al. extend this property of equivariance from translations to rotations and reflections, which then allow us to avoid data augmentation for the purposes of recognising said transformations.
+
+\subsection{The G-convolution}
+    Since \(p4\) and \(p4m\) are generalisations of \(\mathbb{Z}^2\), the convolution/correlation and max-pooling functions described in section 2 must be modified (generalised from the domains of \(\mathbb{Z}^2\) to arbitrary groups). We begin with the G-equivariant correlation function. Let \((G, \circ)\) be an arbitrary group. In the first layer, we have
+    \begin{align*}
+        G \to \mathbb{R}, g \mapsto [f \star \psi](g) := \sum_{y \in \mathbb{Z}^2} \sum_{k} f_k(y)\psi_k(g^{-1}y).
+    \end{align*}
+    Here, the input data is coming directly from the image, hence why we may assume that \(y \in \mathbb{Z}\), since the position of pixels in the image is given by elements of \(\mathbb{Z}^2\). As a result, \(f\) and \(\psi\) are functions over \(\mathbb{Z}^2\). However, as can be seen from the definition, \(f \star \psi\) is defined for general groups, and this is necessary for all layers beyond the first. Thus, for all other layers, a more general definition is given:
+    \begin{align*}
+        G \to \mathbb{R}, g \mapsto [f \star \psi](g) := \sum_{h \in G} \sum_{k} f_k(h)\psi_k(g^{-1}h).
+    \end{align*}
+    Notice that, for the input of the filters, we apply the group binary operation between \(g^{-1}\) and the input to \(f \star \psi\). This is a generalisation of the standard definition, since the inverse of some \(n \in \mathbb{Z}^2\) is \(-n\) (\(n + (-n) = (-n) + n = 0\); it can be checked that \(0\) is the identity element of \((\mathbb{Z}^2, +)\)). Moreover, Cohen et al. derive the equivariance of both of these functions, showing in particular that they commute with translations (in the case of the G-correlation in the first layer), and with all symmetries in \(G\) (in the case of the correlation for all other layers). This is because, for the first layer, \(f\) and \(\psi\) are functions over \(\mathbb{Z}^2\), so any transformations that may be applied on the two must also be over \(\mathbb{Z}^2\). For every other layer, \(f\) and \(\psi\) are functions over \(G\), so the transformations are now more generally over \(G\) as well.
+\subsection{Other layers and full G-CNN equivariance}
+    Aside from convolution/correlation, some more functions are defined for G-CNNs. These include nonlinearities and subgroup and coset max-pooling. We begin with nonlinearities. First, they address issues that may arise due to nonlinearities. If \(\nu: \mathbb{R} \to \mathbb{R}\) is a nonlinearity, then we have the corresponding composition operator \(C_\nu\), defined as
+    \begin{align*}
+        C_\nu f(g) := [\nu \circ f](g) = \nu(f(g)).
+    \end{align*}
+    It is shown that \(C_\nu L_h f = L_h C_\nu f\), i.e. \(C\) commutes with an arbitrary left transformation \(L\). In other words, the composition operator is equivariant to all group transformations. Next, we discuss subgroup and coset max-pooling. Max-pooling is generalised as follows:
+    \begin{align*}
+        Pf(n) := \max_{k \in gU} f(k),
+    \end{align*}
+    where \(U \subset G\) and \(gU = \{gu \hspace{0.5 mm}|\hspace{0.5 mm} g \in G, u \in U\}\). This definition alone, however, does not guarantee equivariance. Cohen et al. resolve this issue by using the unique behaviour of groups - in particular, they show that they obtain equivariance by requiring \(U\) to itself be a group when paired with the binary operation of \(G\) (i.e., by requiring \(U\) to be a subgroup of \(G\)). When doing this, we find that for every \(g_1, g_2 \in G\), we either have that \(g_1U = g_2U\) or \(g_1U \cap g_2U = \varnothing\); and also that \(G = \bigcup_{g \in G} gU\). In other words, \(G\) is equal to the disjoint union of \(U\) and its transformations \(gU\) (referred to as [left] cosets); \(U\) and its cosets evenly divide \(G\) into disjoint subsets. This is relevant, as the notion of pooling with stride can be naturally extended by pooling with a pooling domain \(H\) which is a subgroup of \(G\), so it can be extended while maintaining equivariance as desired.
+
+\subsection{Efficient implementation}
+
+As discussed in the paper, computing the G-convolution for discrete groups mainly involves indexing operations and inner products \cite{cohen2016}. The key implementation idea is that the groups used in the paper, such as \(p4\) and \(p4m\), can be decomposed into a spatial translation and an orientation-changing transformation about the origin, such as a rotation or a reflection. This allows the group correlation to be rewritten in a form where the filter is first transformed into all required rotated or reflected versions, after which a standard fast planar convolution can be applied.
+
+To understand this more intuitively, it is useful to first consider a standard CNN. In a normal convolution layer, a filter is a small grid of learned values, such as a \(3\times3\) or \(5\times5\) pattern, that is slid across the image to detect the same feature at different spatial locations. In this case, the built-in symmetry is translation only.
+
+In a \(p4\) layer, however, each learned filter is associated with four rotated copies, corresponding to the four \(90^\circ\) rotations. In a \(p4m\) layer, each filter is associated with eight transformed copies, since reflections are also included. As a result, the hidden representation is no longer just a single 2D feature map, but a stack of feature maps, one for each allowed orientation state.
+
+This can also be understood in terms of the filter tensor having extra dimensions that encode these symmetry states. Rather than learning every rotated or reflected filter independently, the implementation generates these transformed copies efficiently through inexpensive index permutations. The expanded filter bank can then be reshaped and passed into a standard optimized planar convolution routine. In this way, the network preserves information about both spatial position and orientation, while still reusing the highly optimized convolution operations developed for ordinary CNNs.
+
+\subsection{Experimental results}
+
+The paper evaluates G-CNNs on two benchmarks: rotated MNIST and CIFAR-10. The purpose of these experiments was to determine whether replacing standard planar convolutions with group convolutions could improve classification performance while keeping the comparison approximately fair in terms of parameter count. On rotated MNIST, the dataset contained 62{,}000 randomly rotated handwritten digits and was split into 10{,}000 training, 2{,}000 validation, and 50{,}000 test examples. Model selection was performed using the validation set. The baseline model, denoted Z2CNN, used seven convolution layers with mostly \(3\times3\) kernels, a \(4\times4\) final layer, 20 channels per layer, ReLU activations, batch normalization, dropout, and max-pooling after layer 2. The model was optimized using Adam. The authors then replaced each standard convolution with a p4-convolution, reduced the number of filters by a factor of 2 to keep the parameter count approximately fixed, and applied max-pooling over rotations only after the final convolution layer. This model, called P4CNN, achieved substantially lower error than the baseline. They also evaluated a P4CNNRotationPooling variant, in which rotation pooling was applied after each convolution layer, to test whether introducing invariance too early would be harmful. This model improved over the baseline but performed worse than the full P4CNN, supporting the idea that equivariant structure should be preserved deeper in the network.
+
+For CIFAR-10, the dataset was divided into 40{,}000 training, 10{,}000 validation, and 10{,}000 test examples. Two baseline architectures were used: All-CNN-C and ResNet44. To create the equivariant variants, all standard convolutions were replaced with p4 or p4m convolutions. Because these group convolutions expand the internal representation, the number of filters was reduced so that the number of parameters remained approximately invariant. Specifically, p4 layers used about half as many filters, while p4m layers used about one third as many. The authors also compared performance with and without moderate data augmentation using horizontal flips and small translations. For the ResNet experiments, training used SGD with initial learning rate 0.05, momentum 0.9, and learning-rate reductions at epochs 50, 100, and 150, for a total of 300 epochs. Across both architectures, the equivariant models consistently outperformed their standard counterparts, with p4m-ResNet44 achieving particularly strong results on both plain and augmented CIFAR-10.
+
+\section{Reproduction Experiment}
+
+To evaluate the effect of equivariance on image classification, four models were compared: a standard \(\mathbb{Z}^2\) CNN, a \(p4\) group-equivariant CNN, a \(p4m\) group-equivariant CNN, and an early-invariance \(p4m\) ablation model. All models were trained on the same custom Rotated-MNIST dataset generated from MNIST, using identical train, validation, and test splits. This ensured that performance differences could be attributed primarily to the choice of symmetry-aware architecture rather than changes in the data or training procedure. For each model, training and validation accuracy and loss were recorded over epochs, and the best checkpoint was selected using validation accuracy. Final comparisons were made using test accuracy, parameter count, confusion matrices, and qualitative prediction examples. This design allowed both quantitative and qualitative analysis of how equivariance affected performance under rotated inputs. :contentReference[oaicite:5]{index=5}
+
+\subsection{Goal}
+The goal of this reproduction experiment was not to exactly duplicate the original seven-layer rotated-MNIST architecture used by Cohen et al., but rather to reproduce the central hypothesis of the paper on a newer four-stage backbone. Specifically, the experiment tested whether replacing ordinary convolutions with group-equivariant convolutions would improve classification performance on rotated handwritten digits, and whether preserving equivariant structure until late in the network would outperform introducing invariance too early.
+
+\subsection{Experimental setup}
+
+\begin{table}[h]
+\centering
+\caption{MNIST reproduction experiment setup.}
+\label{tab:mnist_setup}
+\begin{tabular}{ll}
+\hline
+Setting & Value \\
+\hline
+Dataset & Custom Rotated-MNIST from MNIST \\
+Training samples & 10{,}000 \\
+Validation samples & 2{,}000 \\
+Test samples & 10{,}000 \\
+Rotation range & Uniform in $[-180^\circ, 180^\circ]$ \\
+Backbone & 4-stage CNN \\
+Models compared & $Z2$, $P4$, $P4M$, $P4M\_RP$ \\
+Optimizer & Adam \\
+Initial learning rate & $10^{-3}$ \\
+Weight decay & $10^{-4}$ \\
+LR schedule & Step decay, $\gamma=0.1$ at epoch 25 \\
+Batch size & 128 \\
+Epochs & 50 \\
+Seeds & 42, 999 \\
+Checkpoint selection & Best validation accuracy \\
+\hline
+\end{tabular}
+\end{table}
+
+For the MNIST experiment, a custom Rotated-MNIST dataset was constructed from the standard MNIST dataset. The original MNIST training set was shuffled using a fixed split seed, after which 10,000 samples were used for training and 2,000 for validation. The standard MNIST test set of 10,000 images was used for final evaluation. Each image in the training, validation, and test sets was assigned a fixed random rotation angle sampled uniformly from $[-180^\circ, 180^\circ]$. The same rotated split was then reused across all compared models, ensuring that performance differences were due to architecture rather than sampling variation. After rotation, each image was converted to a tensor and normalized using the standard MNIST mean and standard deviation. :contentReference[oaicite:7]{index=7}
+
+Four models were evaluated. The first was a conventional $Z2$ CNN baseline with four convolutional stages, batch normalization, ReLU activations, one spatial max-pooling stage after the second convolution, global average pooling, and a final linear classifier. The second model, $P4$, replaced standard convolutions with equivariant convolutions defined over the discrete rotation group with $N=4$, making the model equivariant to translations and $90^\circ$ rotations. The third model, $P4M$, extended this design to the $p4m$ group, making the network equivariant to translations, $90^\circ$ rotations, and reflections. In both $P4$ and $P4M$, group pooling was applied only near the end of the network so that hidden layers could preserve symmetry-aware intermediate features. Finally, an early-invariance ablation model, denoted $P4M\_RP$, applied group pooling after every block, forcing invariance much earlier in the network. This provided a direct way to test whether preserving equivariant structure deeper in the network was beneficial. :contentReference[oaicite:8]{index=8}
+
+All models were trained using Adam with an initial learning rate of $10^{-3}$, weight decay of $10^{-4}$, batch size 128, and 50 epochs. A step learning-rate scheduler reduced the learning rate by a factor of 10 after epoch 25. Two seeds were used, and the best checkpoint for each run was selected according to validation accuracy. Final results were reported as mean test accuracy with standard deviation across seeds. In addition, the training pipeline saved per-epoch training and validation loss, accuracy history, prediction files, and summary artifacts for later analysis. :contentReference[oaicite:9]{index=9}
+
+\subsection{Results}
+
+\begin{table}[h]
+\centering
+\caption{Test accuracy on the custom Rotated-MNIST benchmark.}
+\label{tab:mnist_results}
+\begin{tabular}{lccc}
+\hline
+$Z2$ & 207{,}562 & 94.09 & 0.07 \\
+$P4$ & 91{,}050 & 96.81 & 0.05 \\
+$P4M$ & 102{,}082 & 94.35 & 0.04 \\
+$P4M\_RP$ & 14{,}000 & 89.54 & 0.08 \\
+\hline
+Model & Params & Test Accuracy (\%) & Std (\%) \\
+\hline
+\end{tabular}
+\end{table}
+
+The results show a clear advantage for the rotation-equivariant model. The baseline $Z2$ CNN achieved a mean test accuracy of 94.09\% with a standard deviation of 0.07\%. The $P4$ model achieved the best performance overall, reaching 96.81\% test accuracy with a standard deviation of 0.05\%. The $P4M$ model achieved 94.35\% test accuracy with a standard deviation of 0.04\%, only slightly above the baseline. The early-pooled $P4M\_RP$ model performed substantially worse, reaching 89.54\% test accuracy with a standard deviation of 0.08\%. These results were highly consistent across the two seeds, as indicated by the small standard deviations. :contentReference[oaicite:10]{index=10}
+
+The strongest finding is that the $P4$ model clearly outperformed all other variants. Compared with the baseline $Z2$ CNN, $P4$ improved test accuracy by 2.72 percentage points. This suggests that explicitly encoding rotational equivariance into the network provides a strong inductive bias for rotated digit recognition. Since the task contains large rotational variation, the ability of the $P4$ model to preserve rotation-aware structure through the hidden layers appears to be highly beneficial. :contentReference[oaicite:11]{index=11}
+
+The comparison between $P4M$ and $P4M\_RP$ is also informative. Although the late-pooled $P4M$ model only slightly improved over the baseline, it still substantially outperformed the early-pooled $P4M\_RP$ variant. This supports the same qualitative conclusion emphasized in Cohen et al.: introducing invariance too early can reduce performance. In the early-pooled model, group pooling was applied after every block, so later layers no longer had access to the full symmetry-aware intermediate representation. As a result, useful information about orientation and reflection was discarded too soon, limiting the model’s ability to build richer hierarchical features. The fact that $P4M\_RP$ still achieved close to 90\% accuracy despite its much smaller effective capacity suggests that the symmetry prior remains useful, but that preserving group structure deeper in the network is important for maximizing accuracy. :contentReference[oaicite:12]{index=12}
+
+Another notable observation is that $P4M$ did not match the performance of $P4$. A likely explanation is that reflections are a stronger prior than rotations alone, and reflection symmetry is not always naturally label-preserving for handwritten digits. While rotations clearly appear in the task distribution, reflections may sometimes distort class-specific structure in a way that is less helpful for recognition. This suggests that adding more symmetry is not automatically better; the imposed symmetry should align closely with the true invariances of the data. :contentReference[oaicite:13]{index=13}
+
+\subsection{Discussion}
+
+This experiment has several limitations that should be acknowledged. First, it does not use the exact rotated-MNIST benchmark from Cohen et al., but instead constructs a custom rotated dataset from standard MNIST. Although this still provides a meaningful controlled comparison, the numerical results are not directly comparable to the paper’s reported benchmark values. :contentReference[oaicite:14]{index=14}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{image/loss_vs_epoch.png}
+    \caption{Training and validation loss curves for the four compared models on custom Rotated-MNIST. The \(P4\) model achieves the lowest validation loss and the most stable convergence behavior.}
+    \label{fig:mnist_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{image/accuracy_vs_epoch.png}
+    \caption{Training and validation accuracy curves for the four compared models on custom Rotated-MNIST. The \(P4\) model converges to the highest validation accuracy, while the early-pooled \(P4M\_RP\) variant performs worst.}
+    \label{fig:mnist_acc}
+\end{figure}
+
+Second, the models are only approximately parameter-matched rather than exactly matched. In particular, the $P4M\_RP$ model has substantially fewer effective parameters because early group pooling converts intermediate representations back to trivial feature types, reducing the complexity of later layers. This means that part of the comparison is also a tradeoff between representational richness and model size, rather than a perfectly controlled architectural substitution. :contentReference[oaicite:15]{index=15}
+
+Finally, although the experiment captures the paper’s main conceptual comparison between standard, equivariant, and early-invariant models, the backbone architecture differs from the seven-layer architecture used in Cohen et al. Therefore, the present results are best interpreted as a controlled reproduction of the main idea of the paper on a newer four-stage architecture, rather than as an exact implementation of the original rotated-MNIST protocol. :contentReference[oaicite:16]{index=16}
+% -------------------------------------------------------
+\section{Critical Evaluation}
+% -------------------------------------------------------
+\subsection{Strengths}
+
+\subsection{Limitations}
+
+\subsection{Discrepancy between our results and the paper}
+
+% -------------------------------------------------------
+\section{Reflections}
+% -------------------------------------------------------
+
+\subsection*{Kavin Kumaran}
+\textit{[Independent reflection to be written by Kavin.]}
+
+\subsection*{Adil Tapal}
+\textit{[Independent reflection to be written by Adil.]}
+
+\subsection*{Robin Liu}
+\textit{[Independent reflection to be written by Robin.]}
+
+\subsection*{Hasan Zia}
+\textit{[Independent reflection to be written by Hasan.]}
+
+% -------------------------------------------------------
+\end{document}

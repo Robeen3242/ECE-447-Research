@@ -1,5 +1,6 @@
 import json
 import os
+import copy
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -124,15 +125,29 @@ class GCNNP4M(nn.Module):
         return x
 
 
-def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0.9, seed=42):
+def train(
+    net,
+    trainloader=None,
+    valloader=None,
+    epochs=30,
+    lr=0.01,
+    momentum=0.9,
+    weight_decay=5e-4,
+    seed=42,
+    step_size=10,
+    gamma=0.1,
+):
     if trainloader is None or valloader is None:
         trainset, _ = get_cifar10_datasets()
         trainloader, valloader, _, _ = create_train_val_loaders(trainset, batch_size=batch_size, seed=seed)
 
     criterion = nn.CrossEntropyLoss()
     val_criterion = nn.CrossEntropyLoss(reduction='sum')
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)
+    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     history = {'train_loss': [], 'val_loss': [], 'val_accuracy': []}
+    best_val_accuracy = float('-inf')
+    best_state = None
 
     for epoch in range(epochs):
         net.train()
@@ -166,11 +181,18 @@ def train(net, trainloader=None, valloader=None, epochs=30, lr=0.001, momentum=0
         history['val_loss'].append(float(avg_val_loss))
         val_accuracy = 100.0 * correct / val_samples
         history['val_accuracy'].append(float(val_accuracy))
+        if val_accuracy > best_val_accuracy:
+            best_val_accuracy = val_accuracy
+            best_state = copy.deepcopy(net.state_dict())
 
         print(
             f'Epoch [{epoch + 1}/{epochs}]  Train Loss: {avg_train_loss:.3f}  '
             f'Val Loss: {avg_val_loss:.4f}  Val Acc: {val_accuracy:.2f}%'
         )
+        scheduler.step()
+
+    if best_state is not None:
+        net.load_state_dict(best_state)
 
     return history
 
@@ -237,8 +259,11 @@ def save_results(
             'epochs': len(history['train_loss']),
             'batch_size': batch_size,
             'optimizer': 'SGD',
-            'lr': 0.001,
+            'lr': 0.01,
             'momentum': 0.9,
+            'weight_decay': 5e-4,
+            'lr_step_size': 10,
+            'lr_gamma': 0.1,
             'num_conv_layers': len(conv_filters),
             'filters_per_conv_layer': conv_filters,
         },

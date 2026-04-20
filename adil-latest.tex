@@ -267,6 +267,36 @@ This experiment has several limitations that should be acknowledged. First, it d
 Second, the models are only approximately parameter-matched rather than exactly matched. In particular, the $P4M\_RP$ model has substantially fewer effective parameters because early group pooling converts intermediate representations back to trivial feature types, reducing the complexity of later layers. This means that part of the comparison is also a tradeoff between representational richness and model size, rather than a perfectly controlled architectural substitution. :contentReference[oaicite:15]{index=15}
 
 Finally, although the experiment captures the paper’s main conceptual comparison between standard, equivariant, and early-invariant models, the backbone architecture differs from the seven-layer architecture used in Cohen et al. Therefore, the present results are best interpreted as a controlled reproduction of the main idea of the paper on a newer four-stage architecture, rather than as an exact implementation of the original rotated-MNIST protocol. :contentReference[oaicite:16]{index=16}
+
+\section{Additional Experiment: Rotation Robustness on CIFAR-10}
+\subsection{Goal}
+This experiment evaluates the rotation robustness of three architectures in a standard CNN (Z²), a GCNN (p4), and a GCNN (p4m) on CIFAR-10, by measuring test accuracy across a range of fixed rotation angles. The goal is to empirically verify whether the inductive bias introduced by group equivariance produces representations that degrade more gracefully under unseen rotational transformations.
+\subsection{Experimental setup}
+All three models were trained on augmented CIFAR-10 and evaluated at fixed test-time rotation angles: 0\degree, 45\degree, 60\degree, 90\degree, 120\degree, 135\degree, 150\degree, and 180\degree. The accuracy gap reflects the parameter reduction applied to the equivariant models to keep comparisons approximately fair.
+\begin{table}[h]
+\centering
+\caption{Model comparison on rotated CIFAR-10.}
+\label{tab:rotation_setup}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{Parameters} & \textbf{Best Test Accuracy} \\
+\midrule
+CNN ($\mathbb{Z}^2$)  & 1{,}372{,}254 & 91.44\% \\
+GCNN (p4)             & 926{,}304     & 88.06\% \\
+GCNN (p4m)            & 824{,}896     & 86.27\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+\subsection{Results and Discussion}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{rotation_experiment.png}
+        \caption{Test accuracy of CNN ($\mathbb{Z}^2$), GCNN (p4), and GCNN (p4m) on CIFAR-10 as a function of test-time rotation angle. All models were trained on augmented data and evaluated at each fixed angle without rotational training. The equivariant models degrade more gracefully than the CNN baseline, particularly at 90° and 180°.}
+    \label{fig:rotation_experiment}
+\end{figure}
+As shown in Figure X, the CNN (Z²) degrades substantially as rotation angle increases, reflecting its lack of built-in rotational symmetry. GCNN (p4) remains stable at 90° and 180°, consistent with its theoretical equivariance guarantee, and degrades more gradually at non-equivariant angles. This supports a key insight from Cohen and Welling: G-convolution forces the network to share weights across orientations, acting as a regulariser that makes learned features more orientation-general even at angles outside the discrete symmetry steps. GCNN (p4m) follows a similar pattern, with modest additional stability from its reflection equivariance. Overall, although the CNN leads, the equivariant models demonstrate clearly superior robustness under distribution shift which suggests the accuracy gap on standard CIFAR-10 understates the practical advantage of group-equivariant architectures.
+
+
 % -------------------------------------------------------
 \section{Critical Evaluation}
 % -------------------------------------------------------

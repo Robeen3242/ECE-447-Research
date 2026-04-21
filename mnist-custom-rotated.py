@@ -1,3 +1,4 @@
+#Author: Adil
 # Similar paramets matching using different group equivariant architectures (Z2, P4, P4M) on a custom Rotated-MNIST dataset with fixed random rotations per image. Each model is trained for multiple seeds and results are saved and summarized in JSON files. The code uses the escnn library for group-equivariant CNNs.
 
 import argparse

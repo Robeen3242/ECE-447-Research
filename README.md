@@ -1,6 +1,6 @@
 # ECE-447-Research
 
-This goal of this repository is to simulate structured research experience in modern machine learning, specifically regarding the study on Group Equivariant Convolutional Networks by Taco S. Cohen and Max Welling.
+This goal of this repository is to simulate structured research experience in modern machine learning, specifically regarding the study on Group Equivariant Convolutional Networks by Taco S. Cohen and Max Welling. The report is saved as `ECE 447 Project Report.pdf`
 
 ## Our Repo
 In the root folder are our All-CNN style CIFAR-10 models `cnngeneral.py`, `gcnngeneral.py`, and `gcnn_p4mgeneral.py` as well as the paper we based our experiment on. We also have included a PDF of our project report. Our prototype/legacy code is in the `old_models` folder, which are the models we used to produce the results for our presentation. For our raw experiments, we chose to opt for the `___general.py` files instead. Their metrics and `.pth` files can be found in the `models` folder. 
